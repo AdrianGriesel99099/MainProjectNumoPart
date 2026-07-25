@@ -893,7 +893,9 @@ dotnet add MainProjectNumoPart.csproj package Azure.Identity
 
 - [ ] **Step 2: Install and start Azurite for local testing**
 
-Visual Studio 2022 bundles Azurite: **Tools → Azurite → Start Azurite**. (Cross-platform alternative if not using Visual Studio: `npm install -g azurite` then run `azurite` in a terminal, or `docker run -p 10000:10000 -p 10001:10001 -p 10002:10002 mcr.microsoft.com/azure-storage/azurite`.) Leave it running for the rest of this task and for manual testing in later tasks.
+Visual Studio 2022 bundles Azurite: **Tools → Azurite → Start Azurite**. (Cross-platform alternative if not using Visual Studio: `npx azurite` — avoids a global install — or `docker run -p 10000:10000 -p 10001:10001 -p 10002:10002 mcr.microsoft.com/azure-storage/azurite`.) Leave it running for the rest of this task and for manual testing in later tasks.
+
+**Version-skew note (confirmed during Task 5):** with Azurite 3.36.0 and `Azure.Storage.Blobs` 12.29.1, requests fail with "API version not supported" (HTTP 400) unless Azurite is started with `--skipApiVersionCheck` (e.g. `npx azurite --skipApiVersionCheck`). If blob calls fail with a 400 despite Azurite clearly running, this is almost certainly why.
 
 - [ ] **Step 3: Write the interface**
 
@@ -2908,8 +2910,11 @@ configuration only — see `docs/superpowers/specs/2026-07-25-azure-infrastructu
 
 - .NET 8 SDK
 - Azurite (Azure Storage emulator). Easiest: Visual Studio 2022 → **Tools → Azurite → Start Azurite**.
-  Alternative: `npm install -g azurite` then run `azurite` in a terminal, or
+  Alternative: `npx azurite --skipApiVersionCheck` (no global install needed), or
   `docker run -p 10000:10000 -p 10001:10001 -p 10002:10002 mcr.microsoft.com/azure-storage/azurite`.
+  **The `--skipApiVersionCheck` flag matters**: with Azurite 3.36.0 and `Azure.Storage.Blobs` 12.29.1
+  (the versions this project uses), blob requests fail with a 400 "API version not supported"
+  error without it.
 
 ## First-time setup
 
