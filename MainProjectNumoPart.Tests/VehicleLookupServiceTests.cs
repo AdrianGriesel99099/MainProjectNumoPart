@@ -54,6 +54,22 @@ namespace MainProjectNumoPart.Tests
         }
 
         [Fact]
+        public async Task FindOrCreateAsync_ThrowsWhenVinAndRegBelongToDifferentVehicles()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var service = new VehicleLookupService(db);
+
+            await service.FindOrCreateAsync("VIN1", null);
+            await db.SaveChangesAsync();
+            await service.FindOrCreateAsync(null, "REG2");
+            await db.SaveChangesAsync();
+
+            // VIN1 belongs to one vehicle, REG2 belongs to a different one — must reject, not guess.
+            await Assert.ThrowsAsync<VehicleIdentifierConflictException>(
+                () => service.FindOrCreateAsync("VIN1", "REG2"));
+        }
+
+        [Fact]
         public async Task FindBySearchTermAsync_MatchesEitherIdentifier()
         {
             using var db = TestDbContextFactory.CreateInMemory();

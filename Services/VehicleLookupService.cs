@@ -7,6 +7,17 @@ using Microsoft.EntityFrameworkCore;
 
 namespace MainProjectNumoPart.Services
 {
+    // Thrown by FindOrCreateAsync when the VIN and Reg supplied in one upload resolve to two
+    // different existing vehicles — almost always a typo in one of the two fields. Callers
+    // (Task 10's Upload handler) must catch this specifically and surface it as a validation
+    // error rather than letting it become an unhandled exception.
+    public class VehicleIdentifierConflictException : Exception
+    {
+        public VehicleIdentifierConflictException(string message) : base(message)
+        {
+        }
+    }
+
     public class VehicleLookupService
     {
         private readonly AppDbContext _db;
@@ -26,9 +37,23 @@ namespace MainProjectNumoPart.Services
             if (normalizedVin is null && normalizedReg is null)
                 throw new ArgumentException("At least one of VIN or Reg is required.");
 
-            var existing = await _db.Vehicles.FirstOrDefaultAsync(v =>
-                (normalizedVin != null && v.Vin == normalizedVin) ||
-                (normalizedReg != null && v.Reg == normalizedReg), ct);
+            // Looked up separately (not a single OR query) specifically so a VIN match and a
+            // Reg match that resolve to two DIFFERENT vehicles can be detected and rejected,
+            // rather than silently picking one of the two.
+            var byVin = normalizedVin is not null
+                ? await _db.Vehicles.FirstOrDefaultAsync(v => v.Vin == normalizedVin, ct)
+                : null;
+            var byReg = normalizedReg is not null
+                ? await _db.Vehicles.FirstOrDefaultAsync(v => v.Reg == normalizedReg, ct)
+                : null;
+
+            if (byVin is not null && byReg is not null && byVin.Id != byReg.Id)
+            {
+                throw new VehicleIdentifierConflictException(
+                    $"VIN '{normalizedVin}' belongs to a different vehicle than Reg '{normalizedReg}'. Check for a typo before uploading.");
+            }
+
+            var existing = byVin ?? byReg;
 
             if (existing is not null)
             {
