@@ -1,0 +1,38 @@
+@* Pages/Upload.cshtml *@
+@page
+@model MainProjectNumoPart.Pages.UploadModel
+@{
+    ViewData["Title"] = "Upload photos";
+}
+
+<h2>Upload photos</h2>
+
+@if (Model.ErrorMessage is not null)
+{
+    <div class="alert alert-danger">@Model.ErrorMessage</div>
+}
+
+<form method="post" enctype="multipart/form-data" class="col-md-6">
+    <div class="mb-3">
+        <label class="form-label">Stage</label>
+        <select asp-for="Stage" class="form-select"
+                asp-items="Html.GetEnumSelectList<MainProjectNumoPart.Models.Stage>()"></select>
+    </div>
+    <div class="mb-3">
+        <label asp-for="Vin" class="form-label">VIN</label>
+        <input asp-for="Vin" class="form-control" />
+    </div>
+    <div class="mb-3">
+        <label asp-for="Reg" class="form-label">Registration</label>
+        <input asp-for="Reg" class="form-control" />
+    </div>
+    <div class="mb-3">
+        <label asp-for="DateTaken" class="form-label">Date taken (optional — read from the photo when possible)</label>
+        <input asp-for="DateTaken" type="date" class="form-control" />
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Photos</label>
+        <input asp-for="Files" type="file" class="form-control" multiple accept="image/jpeg,image/png" />
+    </div>
+    <button type="submit" class="btn btn-primary">Upload</button>
+</form>

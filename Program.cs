@@ -2,6 +2,7 @@ using Azure.Storage.Blobs;
 using MainProjectNumoPart.Data;
 using MainProjectNumoPart.Endpoints;
 using MainProjectNumoPart.Services;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
@@ -42,6 +43,11 @@ builder.Services.ConfigureApplicationCookie(options =>
 {
     options.LoginPath = "/Account/Login";
     options.AccessDeniedPath = "/Account/AccessDenied";
+});
+
+builder.Services.Configure<FormOptions>(options =>
+{
+    options.MultipartBodyLengthLimit = 25 * 1024 * 1024 * 10; // headroom for a multi-file batch; per-file cap is enforced in code
 });
 
 var app = builder.Build();

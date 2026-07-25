@@ -19,12 +19,19 @@
   <ItemGroup>
     <PackageReference Include="Azure.Identity" Version="1.21.0" />
     <PackageReference Include="Azure.Storage.Blobs" Version="12.29.1" />
+    <PackageReference Include="MetadataExtractor" Version="2.9.3" />
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="8.0.29" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.29">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.29" />
+    <!-- Pinned below v4: starting with 4.0.0, SixLabors added a build-time license-key check
+         (SixLaborsLicensing.targets fails CoreCompile with "No Six Labors license found" unless
+         $(SixLaborsLicenseKey)/a sixlabors.lic file is present). 3.1.12 is the last release under
+         the older Split License with no build-time gate, and the APIs this project uses
+         (Image.LoadAsync, Mutate/ResizeOptions, JpegEncoder) are unchanged across the two. -->
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
   </ItemGroup>
 
 </Project>
