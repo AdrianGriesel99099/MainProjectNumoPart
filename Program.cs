@@ -1,4 +1,5 @@
 using MainProjectNumoPart.Data;
+using MainProjectNumoPart.Services;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -8,6 +9,9 @@ builder.Services.AddRazorPages();
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("Default") ?? "Data Source=app.db"));
+
+builder.Services.AddScoped<VehicleLookupService>();
+builder.Services.AddScoped<PhotoSequenceAllocator>();
 
 var app = builder.Build();
 
