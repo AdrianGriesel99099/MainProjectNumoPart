@@ -1,5 +1,6 @@
 using Azure.Storage.Blobs;
 using MainProjectNumoPart.Data;
+using MainProjectNumoPart.Endpoints;
 using MainProjectNumoPart.Services;
 using Microsoft.EntityFrameworkCore;
 
@@ -47,5 +48,7 @@ app.UseRouting();
 app.UseAuthorization();
 
 app.MapRazorPages();
+
+app.MapPhotoEndpoints();
 
 app.Run();
