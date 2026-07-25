@@ -22,21 +22,29 @@ This is the infrastructure sub-project for a private photo gallery website (logi
 | Resource | Purpose |
 |---|---|
 | Resource Group (`rg-<project>-prod`) | Container for all resources below |
-| Azure Container Apps Environment (Consumption workload profile, scale-to-zero, min replicas 0) | Hosts the Razor Pages app as a container |
-| Azure SQL Database (Basic tier, 2GB) | ASP.NET Core Identity user accounts + image metadata (filename, blob path, uploaded date, taken date/EXIF, tags, uploader) |
-| Storage Account → Blob Storage, two containers (LRS) | `thumbnails` (Hot tier) for instant grid/search browsing; `originals` (Cold tier) for full-resolution files — see tiering rationale below. A third container holds the persisted ASP.NET Core Data Protection key ring |
-| Key Vault (Standard tier) | Holds the RSA key used to encrypt the Data Protection key ring (see below) — not general-purpose secret storage |
+| Azure Container Apps Environment (Consumption workload profile, scale-to-zero, min replicas 0, max 1) | Hosts the Razor Pages app as a container. Capped at 1 replica so the mounted SQLite file never has two writers at once |
+| Azure Files share (Standard LRS, small, mounted to the Container App) | Holds `app.db`, a SQLite database: ASP.NET Core Identity user accounts + image metadata (filename, blob path, uploaded date, taken date/EXIF, tags, uploader) — see rationale below |
+| Storage Account → Blob Storage, three containers (LRS) | `thumbnails` (Hot tier) for instant grid/search browsing; `originals` (Cold tier) for full-resolution files — see tiering rationale below; `app-data` (Hot tier) holds the persisted ASP.NET Core Data Protection key ring plus nightly SQLite backups — Hot because both are tiny and get pruned/rotated frequently, which would conflict with Cold's 90-day minimum retention |
+| Key Vault (Standard tier) | Holds the RSA key used to encrypt the Data Protection key ring, **and** the Azure Files storage account key (see below) |
+| Azure Container Apps Job (Consumption, scheduled/cron trigger, nightly) | Copies `app.db` to the `app-data` Hot blob container as a timestamped backup, pruning anything older than 30 days — mitigates SQLite's lack of automatic backups |
 | Log Analytics workspace | Required by Container Apps for logging; free tier covers this volume |
 | GitHub Container Registry (ghcr.io) | Stores the built Docker image — free, used instead of Azure Container Registry (~$5/mo) since only one small image is needed |
 
 **Identity & access:** the Container App gets a system-assigned Managed Identity, granted:
-- `Storage Blob Data Contributor` on the Storage Account (no connection string needed for blob access)
-- Azure AD-based access to the SQL Database (no password/connection secret stored anywhere)
-- Access to the Key Vault key used for Data Protection
+- `Storage Blob Data Contributor` on the Storage Account (no connection string needed for blob access, or for the backup job to write to Blob Storage)
+- Access to the Key Vault secrets/keys below
+
+**One unavoidable secret:** Container Apps does **not** support Managed Identity for mounting Azure Files (confirmed against Microsoft's current docs and product-team guidance — a raw storage account key is the only supported auth method, and identity-based access isn't on their roadmap). That one key is stored in Key Vault and injected into the Container App as a Key-Vault-backed secret reference (via the app's Managed Identity), rather than hardcoded anywhere. It's the single exception to the "no stored secrets" posture below.
 
 ## Why Key Vault, specifically
 
 Scale-to-zero means the container is destroyed and re-created every time it goes idle and someone returns. ASP.NET Core's Data Protection system encrypts auth cookies and antiforgery tokens using a key ring; if that key ring isn't persisted somewhere durable, every cold start invalidates all active logins, forcing constant re-authentication. The fix (a standard, documented pattern for this exact scenario): persist the key ring to Blob Storage (`PersistKeysToAzureBlobStorage`) and encrypt it with a key held in Key Vault (`ProtectKeysWithAzureKeyVault`).
+
+## Why SQLite on Azure Files Instead of a Managed Database
+
+A managed database (Azure SQL Basic) costs ~$7/month flat — over half of the original total estimate — for a workload that's genuinely small: metadata only (no image bytes), a handful of users, low write volume. SQLite on a small Azure Files share costs closer to $0.10-0.50/month and gives EF Core the same query capability (date-range filters, tag joins, uploader lookups all work identically).
+
+Trade-offs accepted: (1) single-writer file locking, mitigated by capping the Container App at 1 replica — not a real loss, since this app was already going to run at low scale; (2) no automatic backups, mitigated by the nightly Container Apps Job that copies the database file to Hot blob storage, pruning snapshots older than 30 days (costs effectively nothing at this file size); (3) the one storage-account-key exception noted above.
 
 ## Why Tiered Blob Storage (Hot thumbnails + Cold originals)
 
@@ -49,12 +57,13 @@ At 500GB, Cold tier storage (~$0.0045/GB/month) costs roughly a fifth of Hot (~$
 | Resource | USD/month | ZAR/month (≈R16.82/USD, 2026-07-24) |
 |---|---|---|
 | Container Apps (scale-to-zero) | ~$0-3 | ~R0-50 |
-| Azure SQL Database (Basic) | ~$7 flat | ~R118 |
+| Azure Files (SQLite host, <1GB) | ~$0.10-0.50 | ~R2-8 |
 | Blob Storage — originals, Cold tier, 500GB (storage + retrieval) | ~$2.25-3 | ~R38-50 |
-| Blob Storage — thumbnails, Hot tier, ~20GB | ~$0.50 | ~R8 |
+| Blob Storage — thumbnails + Data Protection keys + DB backups, Hot tier, ~20GB | ~$0.50 | ~R8 |
 | Key Vault | <$0.10 | <R2 |
+| Container Apps Job (nightly backup, seconds of runtime) | ~$0 (within free grant) | ~R0 |
 | Log Analytics + GitHub Container Registry | $0 | R0 |
-| **Total** | **~$13-16/month** | **~R220-270/month** |
+| **Total** | **~$3-7/month** | **~R50-120/month** |
 
 Optional, separate from Azure: a custom domain (~$10-15/year ≈ R170-250/year). The default `*.azurecontainerapps.io` hostname is free with automatic managed HTTPS, so a custom domain is a nice-to-have, not required at launch.
 
@@ -63,7 +72,7 @@ Exchange rate fluctuates and Azure's actual invoice currency/rate depends on how
 ## Security Posture
 
 - HTTPS enforced by default (Container Apps provides free managed TLS on the default domain).
-- No secrets in code or app settings — Managed Identity for Storage and SQL access, Key Vault only for the Data Protection encryption key.
+- Almost no secrets in code or app settings — Managed Identity for Blob Storage access; Key Vault holds the Data Protection encryption key and the one unavoidable Azure Files account key (see above), neither hardcoded anywhere.
 - ASP.NET Core Identity handles password hashing (PBKDF2) out of the box.
 
 ## Out of Scope (separate spec)
