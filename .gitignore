@@ -3,3 +3,8 @@ obj/
 .vs/
 *.user
 .superpowers/
+
+# SQLite local database
+app.db
+app.db-shm
+app.db-wal

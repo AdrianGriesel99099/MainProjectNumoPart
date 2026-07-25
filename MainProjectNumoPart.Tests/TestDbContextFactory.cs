@@ -1,18 +1,25 @@
+using MainProjectNumoPart.Data;
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
+
 namespace MainProjectNumoPart.Tests
 {
-    /// <summary>
-    /// Factory for creating test instances of AppDbContext.
-    /// Implementation details will be filled in once AppDbContext exists (Task 2).
-    /// </summary>
-    public class TestDbContextFactory
+    public static class TestDbContextFactory
     {
-        /// <summary>
-        /// Creates an in-memory AppDbContext for testing.
-        /// </summary>
-        /// <returns>An open, migrated AppDbContext instance.</returns>
-        public static object CreateInMemory()
+        // Real SQLite (not EF's InMemory provider) so unique-index and constraint
+        // behavior in tests matches what production SQLite actually enforces.
+        public static AppDbContext CreateInMemory()
         {
-            throw new NotImplementedException("TestDbContextFactory.CreateInMemory will be implemented in Task 2.");
+            var connection = new SqliteConnection("Data Source=:memory:");
+            connection.Open();
+
+            var options = new DbContextOptionsBuilder<AppDbContext>()
+                .UseSqlite(connection)
+                .Options;
+
+            var context = new AppDbContext(options);
+            context.Database.EnsureCreated();
+            return context;
         }
     }
 }

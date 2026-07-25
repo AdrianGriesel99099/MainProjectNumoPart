@@ -7,7 +7,22 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- MainProjectNumoPart.Tests lives in a subfolder of this project. Exclude it from every
+         default item glob (not just Compile) so this project never sweeps up the test project's
+         own bin/obj output as Content/None items — that caused runaway nested bin/ copies via
+         the ProjectReference round-trip (each solution build added another nested layer). -->
     <Compile Remove="MainProjectNumoPart.Tests/**" />
+    <Content Remove="MainProjectNumoPart.Tests/**" />
+    <None Remove="MainProjectNumoPart.Tests/**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="8.0.29" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.29">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.29" />
   </ItemGroup>
 
 </Project>
