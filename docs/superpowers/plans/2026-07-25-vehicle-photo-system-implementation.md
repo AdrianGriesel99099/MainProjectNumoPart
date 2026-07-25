@@ -555,7 +555,9 @@ git commit -m "Add VIN/Reg blob folder and filename generation logic"
 
 **Interfaces:**
 - Consumes: `AppDbContext` (Task 2), `PhotoNaming.ResolveBlobFolderName` (Task 3).
-- Produces: `VehicleLookupService(AppDbContext db)` with `Task<Vehicle> FindOrCreateAsync(string? vin, string? reg, CancellationToken ct = default)` (adds to the context but does **not** call `SaveChangesAsync` — the caller controls the transaction boundary) and `Task<Vehicle?> FindBySearchTermAsync(string term, CancellationToken ct = default)`. `PhotoSequenceAllocator(AppDbContext db)` with `Task<int> NextSequenceNumberAsync(int vehicleId, Stage stage, CancellationToken ct = default)`. Task 10 (Upload) is the primary consumer of both; Task 11 (job page) consumes `FindBySearchTermAsync`.
+- Produces: `VehicleLookupService(AppDbContext db)` with `Task<Vehicle> FindOrCreateAsync(string? vin, string? reg, CancellationToken ct = default)` (adds to the context but does **not** call `SaveChangesAsync` — the caller controls the transaction boundary), `Task<Vehicle?> FindBySearchTermAsync(string term, CancellationToken ct = default)`, and `VehicleIdentifierConflictException` (thrown by `FindOrCreateAsync` — see below). `PhotoSequenceAllocator(AppDbContext db)` with `Task<int> NextSequenceNumberAsync(int vehicleId, Stage stage, CancellationToken ct = default)`. Task 10 (Upload) is the primary consumer of both — and **must** catch `VehicleIdentifierConflictException` specifically and show it as a validation error, not let it surface as an unhandled exception; Task 11 (job page) consumes `FindBySearchTermAsync`.
+
+**Design note — VIN/Reg conflict detection:** the earlier draft of this task looked up a vehicle with a single `OR` query (VIN matches *or* Reg matches). That has a real gap: if a VIN belongs to one existing vehicle and a Reg belongs to a *different* existing vehicle (a plausible data-entry typo, not a rare edge case — partially-identified vehicles are the expected steady state here, not an anomaly), the `OR` query would silently return one of the two rows with no error, and photos would get attached to a vehicle that doesn't actually match both fields entered. Caught during Task 4's review, before Task 10 could build the live upload path on this ambiguous contract. Resolved by looking up VIN and Reg **separately** and explicitly rejecting the case where they resolve to two different vehicles.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -614,6 +616,22 @@ namespace MainProjectNumoPart.Tests
             Assert.Equal(created.Id, found.Id);
             Assert.Equal("1HGBH41JXMN109186", found.Vin);
             Assert.Equal(originalFolder, found.BlobFolderName); // Folder name never changes.
+        }
+
+        [Fact]
+        public async Task FindOrCreateAsync_ThrowsWhenVinAndRegBelongToDifferentVehicles()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var service = new VehicleLookupService(db);
+
+            await service.FindOrCreateAsync("VIN1", null);
+            await db.SaveChangesAsync();
+            await service.FindOrCreateAsync(null, "REG2");
+            await db.SaveChangesAsync();
+
+            // VIN1 belongs to one vehicle, REG2 belongs to a different one — must reject, not guess.
+            await Assert.ThrowsAsync<VehicleIdentifierConflictException>(
+                () => service.FindOrCreateAsync("VIN1", "REG2"));
         }
 
         [Fact]
@@ -716,6 +734,17 @@ using Microsoft.EntityFrameworkCore;
 
 namespace MainProjectNumoPart.Services
 {
+    // Thrown by FindOrCreateAsync when the VIN and Reg supplied in one upload resolve to two
+    // different existing vehicles — almost always a typo in one of the two fields. Callers
+    // (Task 10's Upload handler) must catch this specifically and surface it as a validation
+    // error rather than letting it become an unhandled exception.
+    public class VehicleIdentifierConflictException : Exception
+    {
+        public VehicleIdentifierConflictException(string message) : base(message)
+        {
+        }
+    }
+
     public class VehicleLookupService
     {
         private readonly AppDbContext _db;
@@ -735,9 +764,23 @@ namespace MainProjectNumoPart.Services
             if (normalizedVin is null && normalizedReg is null)
                 throw new ArgumentException("At least one of VIN or Reg is required.");
 
-            var existing = await _db.Vehicles.FirstOrDefaultAsync(v =>
-                (normalizedVin != null && v.Vin == normalizedVin) ||
-                (normalizedReg != null && v.Reg == normalizedReg), ct);
+            // Looked up separately (not a single OR query) specifically so a VIN match and a
+            // Reg match that resolve to two DIFFERENT vehicles can be detected and rejected,
+            // rather than silently picking one of the two.
+            var byVin = normalizedVin is not null
+                ? await _db.Vehicles.FirstOrDefaultAsync(v => v.Vin == normalizedVin, ct)
+                : null;
+            var byReg = normalizedReg is not null
+                ? await _db.Vehicles.FirstOrDefaultAsync(v => v.Reg == normalizedReg, ct)
+                : null;
+
+            if (byVin is not null && byReg is not null && byVin.Id != byReg.Id)
+            {
+                throw new VehicleIdentifierConflictException(
+                    $"VIN '{normalizedVin}' belongs to a different vehicle than Reg '{normalizedReg}'. Check for a typo before uploading.");
+            }
+
+            var existing = byVin ?? byReg;
 
             if (existing is not null)
             {
@@ -1795,7 +1838,7 @@ git commit -m "Add admin-only account creation page"
 - Modify: `MainProjectNumoPart.csproj` (packages)
 
 **Interfaces:**
-- Consumes: `PhotoNaming.BuildFileName` (Task 3), `VehicleLookupService.FindOrCreateAsync` (Task 4), `PhotoSequenceAllocator.NextSequenceNumberAsync` (Task 4), `IPhotoStorage` (Task 5).
+- Consumes: `PhotoNaming.BuildFileName` (Task 3), `VehicleLookupService.FindOrCreateAsync` and `VehicleIdentifierConflictException` (Task 4 — **must** be caught specifically around the `FindOrCreateAsync` call and shown as a validation error, per the fix made during Task 4's review), `PhotoSequenceAllocator.NextSequenceNumberAsync` (Task 4), `IPhotoStorage` (Task 5).
 - Produces: `GET/POST /Upload`, `ThumbnailGenerator.CreateThumbnailAsync(Stream source, CancellationToken ct = default) : Task<MemoryStream>` (always JPEG output regardless of input format), `ExifDateReader.TryReadDateTaken(Stream imageStream) : DateTime?`.
 
 - [ ] **Step 1: Add image processing packages**
@@ -1966,7 +2009,18 @@ namespace MainProjectNumoPart.Pages
             }
 
             var userId = _userManager.GetUserId(User)!;
-            var vehicle = await _vehicles.FindOrCreateAsync(Vin, Reg);
+            Vehicle vehicle;
+            try
+            {
+                vehicle = await _vehicles.FindOrCreateAsync(Vin, Reg);
+            }
+            catch (VehicleIdentifierConflictException ex)
+            {
+                // VIN and Reg point at two different existing vehicles — almost always a typo.
+                // No blobs have been touched yet, so nothing to clean up here.
+                ErrorMessage = ex.Message;
+                return Page();
+            }
             await _db.SaveChangesAsync(); // assigns vehicle.Id before it's used in blob paths below
 
             var uploadedBlobPaths = new List<(string original, string thumbnail)>();
