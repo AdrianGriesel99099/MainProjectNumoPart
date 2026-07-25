@@ -25,8 +25,15 @@ namespace MainProjectNumoPart.Data
                 v.HasIndex(x => x.Reg).IsUnique().HasFilter("\"Reg\" IS NOT NULL");
             });
 
+            // Unique, not just indexed: this is the backstop against the concurrent-upload race
+            // where two requests targeting the same vehicle+stage both read the same "next"
+            // sequence number before either commits. Without .IsUnique(), that race succeeds
+            // silently (two Photo rows, one overwritten blob). With it, the second SaveChangesAsync
+            // throws a catchable constraint violation instead — see Upload.cshtml.cs's retry logic,
+            // added during Task 10's review after this exact race was flagged.
             builder.Entity<Photo>()
-                .HasIndex(p => new { p.VehicleId, p.Stage, p.SequenceNumber });
+                .HasIndex(p => new { p.VehicleId, p.Stage, p.SequenceNumber })
+                .IsUnique();
         }
     }
 }
