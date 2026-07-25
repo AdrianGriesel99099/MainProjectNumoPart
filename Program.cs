@@ -1,3 +1,4 @@
+using Azure.Storage.Blobs;
 using MainProjectNumoPart.Data;
 using MainProjectNumoPart.Services;
 using Microsoft.EntityFrameworkCore;
@@ -12,6 +13,21 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 builder.Services.AddScoped<VehicleLookupService>();
 builder.Services.AddScoped<PhotoSequenceAllocator>();
+
+// BlobServiceClient is a singleton (thread-safe, expensive to construct); IPhotoStorage
+// wraps it and is registered per-scope to match the other services above.
+//  - Local dev / Azurite: BlobStorage:ConnectionString is set (see appsettings.Development.json)
+//    and carries an account key, so a plain connection-string client is used.
+//  - Production: no connection string is configured; BlobStorage:ServiceUri plus Managed
+//    Identity (DefaultAzureCredential) is used instead, since there is no account key to store.
+builder.Services.AddSingleton(sp =>
+{
+    var connectionString = builder.Configuration["BlobStorage:ConnectionString"];
+    return !string.IsNullOrEmpty(connectionString)
+        ? new BlobServiceClient(connectionString)
+        : new BlobServiceClient(new Uri(builder.Configuration["BlobStorage:ServiceUri"]!), new Azure.Identity.DefaultAzureCredential());
+});
+builder.Services.AddScoped<IPhotoStorage, BlobPhotoStorage>();
 
 var app = builder.Build();
 
