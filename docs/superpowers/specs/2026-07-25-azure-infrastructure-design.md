@@ -9,6 +9,7 @@ This is the infrastructure sub-project for a private photo gallery website (logi
 - Minimum viable, cheapest reliable Azure footprint for a private gallery used by roughly 10-20 known people (small team/family), not the general public.
 - Single production environment — no separate dev/staging Azure resources.
 - Budget priority: as cheap as possible without sacrificing basic reliability or security.
+- Storage volume: up to ~500GB of original photos, growing over time. A few seconds' extra latency for rarely-viewed originals is acceptable (it enables much cheaper storage tiers — see below).
 
 ## Region & Subscription
 
@@ -23,7 +24,7 @@ This is the infrastructure sub-project for a private photo gallery website (logi
 | Resource Group (`rg-<project>-prod`) | Container for all resources below |
 | Azure Container Apps Environment (Consumption workload profile, scale-to-zero, min replicas 0) | Hosts the Razor Pages app as a container |
 | Azure SQL Database (Basic tier, 2GB) | ASP.NET Core Identity user accounts + image metadata (filename, blob path, uploaded date, taken date/EXIF, tags, uploader) |
-| Storage Account → Blob Storage (Hot tier, LRS) | The actual image files; a separate container also holds the persisted ASP.NET Core Data Protection key ring |
+| Storage Account → Blob Storage, two containers (LRS) | `thumbnails` (Hot tier) for instant grid/search browsing; `originals` (Cold tier) for full-resolution files — see tiering rationale below. A third container holds the persisted ASP.NET Core Data Protection key ring |
 | Key Vault (Standard tier) | Holds the RSA key used to encrypt the Data Protection key ring (see below) — not general-purpose secret storage |
 | Log Analytics workspace | Required by Container Apps for logging; free tier covers this volume |
 | GitHub Container Registry (ghcr.io) | Stores the built Docker image — free, used instead of Azure Container Registry (~$5/mo) since only one small image is needed |
@@ -37,16 +38,23 @@ This is the infrastructure sub-project for a private photo gallery website (logi
 
 Scale-to-zero means the container is destroyed and re-created every time it goes idle and someone returns. ASP.NET Core's Data Protection system encrypts auth cookies and antiforgery tokens using a key ring; if that key ring isn't persisted somewhere durable, every cold start invalidates all active logins, forcing constant re-authentication. The fix (a standard, documented pattern for this exact scenario): persist the key ring to Blob Storage (`PersistKeysToAzureBlobStorage`) and encrypt it with a key held in Key Vault (`ProtectKeysWithAzureKeyVault`).
 
-## Cost Estimate (South Africa North)
+## Why Tiered Blob Storage (Hot thumbnails + Cold originals)
+
+Cool and Cold tiers are **not** slower to read than Hot — access latency is the same (milliseconds); only Azure's separate Archive tier has the multi-hour rehydration delay, and that's unsuitable for a browsable site. The real trade-off for Cool/Cold is: lower cost per GB stored, a small per-GB fee when a blob is *read*, and a minimum retention period (30 days for Cool, 90 for Cold) before deleting/re-tiering without an early-deletion charge — all fine for a photo archive that's essentially write-once, read-occasionally.
+
+At 500GB, Cold tier storage (~$0.0045/GB/month) costs roughly a fifth of Hot (~$0.0219/GB/month), and even generous monthly viewing (tens of GB retrieved) only adds a fraction of a dollar in retrieval fees. Thumbnails stay in Hot tier since they're small in aggregate (tens of GB even for a very large photo count) and are read constantly during browsing — Hot avoids per-read retrieval fees for that access pattern.
+
+## Cost Estimate (South Africa North, 500GB of originals)
 
 | Resource | USD/month | ZAR/month (≈R16.82/USD, 2026-07-24) |
 |---|---|---|
 | Container Apps (scale-to-zero) | ~$0-3 | ~R0-50 |
 | Azure SQL Database (Basic) | ~$7 flat | ~R118 |
-| Blob Storage (Hot, ~50GB) | ~$1.50 | ~R25 |
+| Blob Storage — originals, Cold tier, 500GB (storage + retrieval) | ~$2.25-3 | ~R38-50 |
+| Blob Storage — thumbnails, Hot tier, ~20GB | ~$0.50 | ~R8 |
 | Key Vault | <$0.10 | <R2 |
 | Log Analytics + GitHub Container Registry | $0 | R0 |
-| **Total** | **~$9-12/month** | **~R150-200/month** |
+| **Total** | **~$13-16/month** | **~R220-270/month** |
 
 Optional, separate from Azure: a custom domain (~$10-15/year ≈ R170-250/year). The default `*.azurecontainerapps.io` hostname is free with automatic managed HTTPS, so a custom domain is a nice-to-have, not required at launch.
 
