@@ -2,6 +2,7 @@ using Azure.Storage.Blobs;
 using MainProjectNumoPart.Data;
 using MainProjectNumoPart.Endpoints;
 using MainProjectNumoPart.Services;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -30,6 +31,19 @@ builder.Services.AddSingleton(sp =>
 });
 builder.Services.AddScoped<IPhotoStorage, BlobPhotoStorage>();
 
+builder.Services.AddIdentity<IdentityUser, IdentityRole>(options =>
+{
+    options.SignIn.RequireConfirmedAccount = false;
+})
+.AddEntityFrameworkStores<AppDbContext>()
+.AddDefaultTokenProviders();
+
+builder.Services.ConfigureApplicationCookie(options =>
+{
+    options.LoginPath = "/Account/Login";
+    options.AccessDeniedPath = "/Account/AccessDenied";
+});
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -45,10 +59,19 @@ app.UseStaticFiles();
 
 app.UseRouting();
 
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapRazorPages();
 
 app.MapPhotoEndpoints();
+
+await AdminSeeder.SeedInitialAdminAsync(app.Services);
+
+app.MapPost("/account/logout", async (SignInManager<IdentityUser> signInManager) =>
+{
+    await signInManager.SignOutAsync();
+    return Results.Redirect("/");
+}).RequireAuthorization();
 
 app.Run();
