@@ -1,0 +1,45 @@
+@page
+@model MainProjectNumoPart.Pages.Account.LoginModel
+@{
+    ViewData["Title"] = "Sign in";
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>Sign in — Workshop</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="~/css/site.css" />
+</head>
+<body class="login-body">
+    <div class="login-frame">
+        <div class="login-card">
+            <div class="login-logo">Workshop</div>
+            <div class="login-sub">Sign in to continue</div>
+
+            @if (Model.ErrorMessage is not null)
+            {
+                <div class="alert alert-danger py-2">@Model.ErrorMessage</div>
+            }
+
+            <form method="post">
+                <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+                <label class="login-field-label" asp-for="Input.EmailOrUsername">Email or username</label>
+                <input asp-for="Input.EmailOrUsername" class="form-control login-input" autofocus />
+
+                <label class="login-field-label" asp-for="Input.Password">Password</label>
+                <input asp-for="Input.Password" class="form-control login-input" />
+
+                <button type="submit" class="btn login-btn w-100">Sign in</button>
+            </form>
+
+            <div class="login-lock">🔒 Secured — HTTPS, private access only</div>
+            <div class="login-footer">
+                This is a private system.<br />
+                Accounts are created by an admin — no public sign-up.
+            </div>
+        </div>
+    </div>
+</body>
+</html>
