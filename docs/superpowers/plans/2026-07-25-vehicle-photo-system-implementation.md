@@ -243,12 +243,28 @@ namespace MainProjectNumoPart.Data
                 v.HasIndex(x => x.Reg).IsUnique().HasFilter("\"Reg\" IS NOT NULL");
             });
 
+            // Unique, not just indexed: this is the backstop against the concurrent-upload race
+            // where two requests targeting the same vehicle+stage both read the same "next"
+            // sequence number before either commits. Without .IsUnique(), that race succeeds
+            // silently (two Photo rows, one overwritten blob). With it, the second SaveChangesAsync
+            // throws a catchable constraint violation instead — see Upload.cshtml.cs's retry logic,
+            // added during Task 10's review after this exact race was flagged.
             builder.Entity<Photo>()
-                .HasIndex(p => new { p.VehicleId, p.Stage, p.SequenceNumber });
+                .HasIndex(p => new { p.VehicleId, p.Stage, p.SequenceNumber })
+                .IsUnique();
         }
     }
 }
 ```
+
+**Migration note (added after Task 10's review, once Tasks 1-9 were already built and committed):** this index changed from non-unique to unique after the fact. Whoever implements this needs a new migration on top of `InitialCreate`:
+
+```bash
+dotnet ef migrations add MakePhotoSequenceUnique --project MainProjectNumoPart.csproj
+dotnet ef database update --project MainProjectNumoPart.csproj
+```
+
+If any duplicate `(VehicleId, Stage, SequenceNumber)` rows already exist in a local dev database from testing before this fix, `database update` will fail with a constraint error — delete `app.db` and re-run migrations from scratch rather than trying to hand-fix duplicate rows in a throwaway local dev database.
 
 - [ ] **Step 4: Create and apply the initial migration**
 
@@ -2027,84 +2043,125 @@ namespace MainProjectNumoPart.Pages
             }
             await _db.SaveChangesAsync(); // assigns vehicle.Id before it's used in blob paths below
 
-            var uploadedBlobPaths = new List<(string original, string thumbnail)>();
-
-            try
+            // Retries up to 3 times total. Guards against a race the first version of this method
+            // didn't: two concurrent uploads to the SAME vehicle+stage can both read the same
+            // "next" sequence number before either commits — "single instance" (Global Constraints)
+            // rules out multiple *replicas*, not multiple *concurrent requests* within the one
+            // process, which ASP.NET Core handles routinely. The Photo(VehicleId,Stage,SequenceNumber)
+            // index is unique specifically so the SECOND concurrent request's SaveChangesAsync fails
+            // loudly instead of silently overwriting the first request's blobs — this loop is what
+            // turns that loud failure into an invisible-to-the-user retry with a fresh number.
+            const int maxAttempts = 3;
+            for (var attempt = 1; attempt <= maxAttempts; attempt++)
             {
-                // Allocated ONCE per batch, then handed out locally as sequenceNumber++ — not
-                // re-queried per file. NextSequenceNumberAsync reads the Photos table directly, but
-                // SaveChangesAsync only runs once, after this whole loop — so Photo rows added
-                // earlier in the same loop are only in the EF change tracker, invisible to a fresh
-                // query. Querying per file gave every file in a batch the SAME sequence number,
-                // which silently overwrote earlier blobs at the identical path (caught during
-                // Task 10's own end-to-end testing, before this ever got dispatched for review).
-                var nextSequenceNumber = await _sequencer.NextSequenceNumberAsync(vehicle.Id, Stage);
+                var uploadedBlobPaths = new List<(string original, string? thumbnail)>();
 
-                foreach (var file in Files)
+                try
                 {
-                    var sequenceNumber = nextSequenceNumber++;
-                    var originalExtension = Path.GetExtension(file.FileName);
-                    var originalFileName = PhotoNaming.BuildFileName(vehicle.Vin, vehicle.Reg, sequenceNumber, originalExtension);
-                    var thumbnailFileName = PhotoNaming.BuildFileName(vehicle.Vin, vehicle.Reg, sequenceNumber, ".jpg");
+                    var nextSequenceNumber = await _sequencer.NextSequenceNumberAsync(vehicle.Id, Stage);
 
-                    var blobPathOriginal = $"{vehicle.BlobFolderName}/{Stage}/{originalFileName}";
-                    var blobPathThumbnail = $"{vehicle.BlobFolderName}/{Stage}/{thumbnailFileName}";
-
-                    using var buffered = new MemoryStream();
-                    await using (var uploadStream = file.OpenReadStream())
+                    foreach (var file in Files)
                     {
-                        await uploadStream.CopyToAsync(buffered);
+                        var sequenceNumber = nextSequenceNumber++;
+                        var originalExtension = Path.GetExtension(file.FileName);
+                        var originalFileName = PhotoNaming.BuildFileName(vehicle.Vin, vehicle.Reg, sequenceNumber, originalExtension);
+                        var thumbnailFileName = PhotoNaming.BuildFileName(vehicle.Vin, vehicle.Reg, sequenceNumber, ".jpg");
+
+                        var blobPathOriginal = $"{vehicle.BlobFolderName}/{Stage}/{originalFileName}";
+                        var blobPathThumbnail = $"{vehicle.BlobFolderName}/{Stage}/{thumbnailFileName}";
+
+                        using var buffered = new MemoryStream();
+                        await using (var uploadStream = file.OpenReadStream())
+                        {
+                            await uploadStream.CopyToAsync(buffered);
+                        }
+                        buffered.Position = 0;
+
+                        DateTime? dateTaken = DateTaken.HasValue
+                            ? DateTime.SpecifyKind(DateTaken.Value, DateTimeKind.Utc)
+                            : ExifDateReader.TryReadDateTaken(buffered);
+                        buffered.Position = 0;
+
+                        using var thumbnailStream = await ThumbnailGenerator.CreateThumbnailAsync(buffered);
+                        buffered.Position = 0;
+
+                        // Each blob path is recorded as SOON as its own upload succeeds — not batched
+                        // after both original+thumbnail complete — so a failure between the two
+                        // (e.g. the thumbnail upload throwing right after the original succeeded)
+                        // still leaves the successfully-uploaded original in uploadedBlobPaths and
+                        // therefore covered by cleanup below. Recording both together after the fact
+                        // would silently orphan the original in that narrow case.
+                        await _storage.UploadOriginalAsync(blobPathOriginal, buffered, file.ContentType);
+                        uploadedBlobPaths.Add((blobPathOriginal, null));
+                        await _storage.UploadThumbnailAsync(blobPathThumbnail, thumbnailStream, "image/jpeg");
+                        uploadedBlobPaths[^1] = (blobPathOriginal, blobPathThumbnail);
+
+                        _db.Photos.Add(new Photo
+                        {
+                            VehicleId = vehicle.Id,
+                            Stage = Stage,
+                            FileName = originalFileName,
+                            BlobPathOriginal = blobPathOriginal,
+                            BlobPathThumbnail = blobPathThumbnail,
+                            ContentType = file.ContentType,
+                            SizeBytes = file.Length,
+                            UploadedAtUtc = DateTime.UtcNow,
+                            DateTakenUtc = dateTaken,
+                            SequenceNumber = sequenceNumber,
+                            UploaderId = userId
+                        });
                     }
-                    buffered.Position = 0;
 
-                    DateTime? dateTaken = DateTaken.HasValue
-                        ? DateTime.SpecifyKind(DateTaken.Value, DateTimeKind.Utc)
-                        : ExifDateReader.TryReadDateTaken(buffered);
-                    buffered.Position = 0;
-
-                    using var thumbnailStream = await ThumbnailGenerator.CreateThumbnailAsync(buffered);
-                    buffered.Position = 0;
-
-                    await _storage.UploadOriginalAsync(blobPathOriginal, buffered, file.ContentType);
-                    await _storage.UploadThumbnailAsync(blobPathThumbnail, thumbnailStream, "image/jpeg");
-                    uploadedBlobPaths.Add((blobPathOriginal, blobPathThumbnail));
-
-                    _db.Photos.Add(new Photo
-                    {
-                        VehicleId = vehicle.Id,
-                        Stage = Stage,
-                        FileName = originalFileName,
-                        BlobPathOriginal = blobPathOriginal,
-                        BlobPathThumbnail = blobPathThumbnail,
-                        ContentType = file.ContentType,
-                        SizeBytes = file.Length,
-                        UploadedAtUtc = DateTime.UtcNow,
-                        DateTakenUtc = dateTaken,
-                        SequenceNumber = sequenceNumber,
-                        UploaderId = userId
-                    });
+                    await _db.SaveChangesAsync();
+                    break; // success — leave the retry loop
                 }
-
-                await _db.SaveChangesAsync();
-            }
-            catch
-            {
-                // The DB save (or a later blob write in the loop) failed after some blobs
-                // already landed — remove them so storage doesn't silently accumulate
-                // untracked files that still cost money.
-                foreach (var (original, thumbnail) in uploadedBlobPaths)
+                catch (Exception ex) when (IsSequenceConflict(ex) && attempt < maxAttempts)
                 {
-                    await _storage.DeleteOriginalAsync(original);
-                    await _storage.DeleteThumbnailAsync(thumbnail);
+                    // Lost the race to a concurrent upload targeting the same vehicle+stage.
+                    // Nothing committed to the DB (SaveChangesAsync itself failed) — clean up this
+                    // attempt's blobs and any not-yet-flushed thumbnail path, then retry with a
+                    // freshly-read sequence number.
+                    foreach (var (original, thumbnail) in uploadedBlobPaths)
+                    {
+                        await _storage.DeleteOriginalAsync(original);
+                        if (thumbnail is not null) await _storage.DeleteThumbnailAsync(thumbnail);
+                    }
+                    _db.ChangeTracker.Clear(); // discard this attempt's tracked-but-unsaved Photo rows
                 }
-                throw;
+                catch
+                {
+                    // Any other failure (not a sequence conflict, or retries exhausted) — remove
+                    // whatever blobs this attempt uploaded so storage doesn't silently accumulate
+                    // untracked files that still cost money, then propagate.
+                    foreach (var (original, thumbnail) in uploadedBlobPaths)
+                    {
+                        await _storage.DeleteOriginalAsync(original);
+                        if (thumbnail is not null) await _storage.DeleteThumbnailAsync(thumbnail);
+                    }
+                    throw;
+                }
             }
 
             return RedirectToPage("/Vehicles/Details", new { id = vehicle.Id });
         }
+
+        // EF Core wraps SQLite constraint violations in DbUpdateException; check the underlying
+        // SqliteException's EXTENDED error code (2067 = SQLITE_CONSTRAINT_UNIQUE) specifically —
+        // not just the primary code (19 = SQLITE_CONSTRAINT, which also covers foreign-key/not-null/
+        // check violations that should NOT be silently retried, since retrying wouldn't fix them.
+        private static bool IsSequenceConflict(Exception ex)
+        {
+            return ex is DbUpdateException { InnerException: SqliteException { SqliteExtendedErrorCode: 2067 } };
+        }
     }
 }
 ```
+
+Add `using Microsoft.Data.Sqlite;` and `using Microsoft.EntityFrameworkCore;` (for `DbUpdateException`) to the top of `Upload.cshtml.cs`.
+
+**Note on the vehicle-creation path:** `FindOrCreateAsync` + its `SaveChangesAsync` (just above this block) has the same class of race on genuinely-new VIN/Reg creation (two concurrent uploads racing to create the same brand-new vehicle) — narrower than the photo-sequence race since it only triggers when both requests target an identifier that doesn't exist yet, rather than any existing vehicle+stage. Deliberately left unretried for now; `Vehicle.Vin`/`Vehicle.Reg`'s existing unique indexes mean it already fails loudly rather than silently, which is the more urgent half of the original concern. Revisit if this narrower race is ever actually hit.
+
+**Testing:** add unit tests for `ThumbnailGenerator.CreateThumbnailAsync` and `ExifDateReader.TryReadDateTaken` in `MainProjectNumoPart.Tests/` — both are pure, deterministic, currently uncovered, and were the two riskiest untested pieces of this task per its own review. Generate small real test images inline in the tests using `SixLabors.ImageSharp` itself (already a project dependency) rather than committing binary fixture files — e.g. `new Image<Rgba32>(100, 100)` saved to a `MemoryStream` as JPEG/PNG, with EXIF written via ImageSharp's metadata API for the date-taken case. A dedicated regression test for the sequence-collision bug itself isn't needed on top of this — the new unique index turns a reintroduction of that bug into an immediate, loud constraint failure, not a silent one, so the database is now the regression guard.
 
 - [ ] **Step 5: Write the view**
 
