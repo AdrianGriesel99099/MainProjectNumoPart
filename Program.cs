@@ -50,6 +50,17 @@ builder.Services.Configure<FormOptions>(options =>
     options.MultipartBodyLengthLimit = 25 * 1024 * 1024 * 10; // headroom for a multi-file batch; per-file cap is enforced in code
 });
 
+// FormOptions above only governs the multipart *form* reader. Kestrel enforces its own,
+// separate request body ceiling (KestrelServerOptions.Limits.MaxRequestBodySize, default
+// ~30,000,000 bytes) before the request ever reaches form parsing — verified against a running
+// instance: a batch with two 16MB files (32MB total, each file individually under the app's own
+// 25MB per-file cap) had its connection reset by Kestrel, never reaching UploadModel at all. Both
+// limits need raising together for a multi-file batch to actually get the headroom intended above.
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.MaxRequestBodySize = 25 * 1024 * 1024 * 10;
+});
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
