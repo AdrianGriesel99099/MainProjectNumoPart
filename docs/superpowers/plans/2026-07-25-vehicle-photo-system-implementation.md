@@ -2121,11 +2121,7 @@ namespace MainProjectNumoPart.Pages
                     // Nothing committed to the DB (SaveChangesAsync itself failed) — clean up this
                     // attempt's blobs and any not-yet-flushed thumbnail path, then retry with a
                     // freshly-read sequence number.
-                    foreach (var (original, thumbnail) in uploadedBlobPaths)
-                    {
-                        await _storage.DeleteOriginalAsync(original);
-                        if (thumbnail is not null) await _storage.DeleteThumbnailAsync(thumbnail);
-                    }
+                    await CleanUpBlobsAsync(uploadedBlobPaths);
                     _db.ChangeTracker.Clear(); // discard this attempt's tracked-but-unsaved Photo rows
                 }
                 catch
@@ -2133,16 +2129,52 @@ namespace MainProjectNumoPart.Pages
                     // Any other failure (not a sequence conflict, or retries exhausted) — remove
                     // whatever blobs this attempt uploaded so storage doesn't silently accumulate
                     // untracked files that still cost money, then propagate.
-                    foreach (var (original, thumbnail) in uploadedBlobPaths)
-                    {
-                        await _storage.DeleteOriginalAsync(original);
-                        if (thumbnail is not null) await _storage.DeleteThumbnailAsync(thumbnail);
-                    }
+                    await CleanUpBlobsAsync(uploadedBlobPaths);
                     throw;
                 }
             }
 
             return RedirectToPage("/Vehicles/Details", new { id = vehicle.Id });
+        }
+
+        // Found via real concurrent-request testing (two Task.WhenAll'd POSTs racing the same
+        // vehicle+stage): when two requests collide on the same sequence number, PhotoNaming
+        // produces the IDENTICAL blob path for both — that's inherent to the path being a
+        // deterministic function of (vehicle, stage, sequenceNumber, extension), not something
+        // this fix changes. Naively deleting every path this attempt touched, unconditionally, is
+        // unsafe: if the OTHER (winning) request's SaveChangesAsync already committed by the time
+        // this one's cleanup runs, that path is now the winner's — deleting it destroys a live,
+        // already-persisted Photo's file. Reproduced exactly: attempt A won with SequenceNumber=2,
+        // attempt B lost, and B's unconditional cleanup deleted the blob A had just committed to,
+        // leaving Photo row A in the DB pointing at a 404. Guarding the delete behind an existence
+        // check closes that: if a Photo row now references this exact path, some other request
+        // (almost certainly the one that caused this very failure) has already claimed it, so this
+        // attempt leaves it alone — worst case a harmless untouched blob, never a deleted live one.
+        //
+        // Known residual gap, not closed by this guard, deliberately left as a documented
+        // limitation rather than fixed here: blob uploads themselves aren't isolated per attempt —
+        // both requests can genuinely write bytes to the identical path before either commits. If
+        // the LOSING request's write physically lands after the WINNING request's, the winner's
+        // now-permanent Photo row can end up pointing at the loser's image content instead of its
+        // own (wrong photo, not a missing one). This requires two rare coincidences to stack — a
+        // sequence-number collision at all, plus an unlucky low-level write-timing interleaving
+        // between the two racing requests — and fully closing it needs a real design change (e.g.
+        // per-attempt staging paths finalized only after a successful commit, or conditional/
+        // ETag-guarded blob uploads that reject an overwrite and turn this into another catchable,
+        // retryable conflict). The more urgent failure mode — data loss / a DB row pointing at
+        // nothing — is fully closed by the guard below. Revisit the residual only if it's ever
+        // actually hit in practice.
+        private async Task CleanUpBlobsAsync(List<(string original, string? thumbnail)> uploadedBlobPaths)
+        {
+            foreach (var (original, thumbnail) in uploadedBlobPaths)
+            {
+                var stillOrphaned = !await _db.Photos.AsNoTracking().AnyAsync(p => p.BlobPathOriginal == original);
+                if (stillOrphaned)
+                {
+                    await _storage.DeleteOriginalAsync(original);
+                    if (thumbnail is not null) await _storage.DeleteThumbnailAsync(thumbnail);
+                }
+            }
         }
 
         // EF Core wraps SQLite constraint violations in DbUpdateException; check the underlying
@@ -2157,7 +2189,7 @@ namespace MainProjectNumoPart.Pages
 }
 ```
 
-Add `using Microsoft.Data.Sqlite;` and `using Microsoft.EntityFrameworkCore;` (for `DbUpdateException`) to the top of `Upload.cshtml.cs`.
+Add `using Microsoft.Data.Sqlite;` and `using Microsoft.EntityFrameworkCore;` (for `DbUpdateException` and `AsNoTracking`/`AnyAsync`) to the top of `Upload.cshtml.cs`.
 
 **Note on the vehicle-creation path:** `FindOrCreateAsync` + its `SaveChangesAsync` (just above this block) has the same class of race on genuinely-new VIN/Reg creation (two concurrent uploads racing to create the same brand-new vehicle) — narrower than the photo-sequence race since it only triggers when both requests target an identifier that doesn't exist yet, rather than any existing vehicle+stage. Deliberately left unretried for now; `Vehicle.Vin`/`Vehicle.Reg`'s existing unique indexes mean it already fails loudly rather than silently, which is the more urgent half of the original concern. Revisit if this narrower race is ever actually hit.
 
