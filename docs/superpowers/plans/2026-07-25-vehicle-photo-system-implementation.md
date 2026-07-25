@@ -1846,9 +1846,11 @@ git commit -m "Add admin-only account creation page"
 - [ ] **Step 1: Add image processing packages**
 
 ```bash
-dotnet add MainProjectNumoPart.csproj package SixLabors.ImageSharp
+dotnet add MainProjectNumoPart.csproj package SixLabors.ImageSharp --version 3.1.12
 dotnet add MainProjectNumoPart.csproj package MetadataExtractor
 ```
+
+**Pin ImageSharp to 3.1.12, not latest.** Confirmed during Task 10: unpinned `dotnet add package SixLabors.ImageSharp` resolves to 4.0.0, which added a build-time license-check MSBuild task that fails `CoreCompile` outright without a paid Six Labors license key ("No Six Labors license found... obtain a license from https://sixlabors.com/pricing/"). 3.1.12 is the latest release before that gate, with no code differences affecting the APIs this task uses (`Image.LoadAsync`, `Mutate`/`ResizeOptions`, `JpegEncoder`). This is a real constraint on the project going forward: future ImageSharp security patches may only land on the 4.x line, at which point this either needs a commercial license or careful monitoring of whether 3.x continues to receive backports.
 
 - [ ] **Step 2: Implement the thumbnail generator**
 
@@ -2029,9 +2031,18 @@ namespace MainProjectNumoPart.Pages
 
             try
             {
+                // Allocated ONCE per batch, then handed out locally as sequenceNumber++ — not
+                // re-queried per file. NextSequenceNumberAsync reads the Photos table directly, but
+                // SaveChangesAsync only runs once, after this whole loop — so Photo rows added
+                // earlier in the same loop are only in the EF change tracker, invisible to a fresh
+                // query. Querying per file gave every file in a batch the SAME sequence number,
+                // which silently overwrote earlier blobs at the identical path (caught during
+                // Task 10's own end-to-end testing, before this ever got dispatched for review).
+                var nextSequenceNumber = await _sequencer.NextSequenceNumberAsync(vehicle.Id, Stage);
+
                 foreach (var file in Files)
                 {
-                    var sequenceNumber = await _sequencer.NextSequenceNumberAsync(vehicle.Id, Stage);
+                    var sequenceNumber = nextSequenceNumber++;
                     var originalExtension = Path.GetExtension(file.FileName);
                     var originalFileName = PhotoNaming.BuildFileName(vehicle.Vin, vehicle.Reg, sequenceNumber, originalExtension);
                     var thumbnailFileName = PhotoNaming.BuildFileName(vehicle.Vin, vehicle.Reg, sequenceNumber, ".jpg");
@@ -2141,10 +2152,19 @@ namespace MainProjectNumoPart.Pages
 - [ ] **Step 6: Register the DbContext connection and IFormFile size limits**
 
 ```csharp
-// Program.cs — inside builder.Services.Configure<FormOptions> (add if not present) before var app = builder.Build();
+// Program.cs — before var app = builder.Build();
 builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
 {
     options.MultipartBodyLengthLimit = 25 * 1024 * 1024 * 10; // headroom for a multi-file batch; per-file cap is enforced in code
+});
+
+// FormOptions alone isn't enough: Kestrel enforces its OWN, separate request-body ceiling
+// (default ~30MB) before a request even reaches multipart form parsing. Verified during
+// Task 10: two files well under the 25MB per-file cap (32MB combined) had the connection
+// reset by Kestrel before ever reaching UploadModel. Raised to match FormOptions above.
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Limits.MaxRequestBodySize = 25 * 1024 * 1024 * 10;
 });
 ```
 
