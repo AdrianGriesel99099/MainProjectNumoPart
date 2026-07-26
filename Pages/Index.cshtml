@@ -13,7 +13,12 @@
     </form>
     @if (Model.NotFoundMessage is not null)
     {
-        <p class="text-danger mt-2">@Model.NotFoundMessage</p>
+        @* A failed search is the most common way a brand-new vehicle surfaces — offer the
+           obvious next step (document it) instead of a dead end. *@
+        <p class="text-danger mt-2">
+            @Model.NotFoundMessage
+            <a asp-page="/Upload">Upload photos for a new vehicle</a>
+        </p>
     }
 </div>
 
