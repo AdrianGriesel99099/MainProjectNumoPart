@@ -52,6 +52,7 @@ namespace MainProjectNumoPart.Endpoints
                     .ToList();
 
                 if (ids.Count == 0) return Results.BadRequest("No photos selected.");
+                if (ids.Count > 200) return Results.BadRequest("Too many photos selected. Maximum 200 photos per download.");
 
                 var photos = await db.Photos.Where(p => ids.Contains(p.Id)).ToListAsync();
 
