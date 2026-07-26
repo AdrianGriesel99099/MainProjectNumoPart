@@ -7,6 +7,8 @@ configuration only — see `docs/superpowers/specs/2026-07-25-azure-infrastructu
 ## Prerequisites
 
 - .NET 8 SDK
+- `dotnet-ef` (EF Core CLI tool), needed for the migration command in step 3 below:
+  `dotnet tool install --global dotnet-ef`.
 - Azurite (Azure Storage emulator). Easiest: Visual Studio 2022 → **Tools → Azurite → Start Azurite**.
   Alternative: `npx azurite --skipApiVersionCheck` (no global install needed), or
   `docker run -p 10000:10000 -p 10001:10001 -p 10002:10002 mcr.microsoft.com/azure-storage/azurite`.
