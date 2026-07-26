@@ -58,16 +58,22 @@ namespace MainProjectNumoPart.Endpoints
                 response.ContentType = "application/zip";
                 response.Headers.ContentDisposition = $"attachment; filename=\"photos-{DateTime.UtcNow:yyyyMMdd-HHmmss}.zip\"";
 
-                using (var archive = new ZipArchive(response.Body, ZipArchiveMode.Create, leaveOpen: true))
+                using (var memoryStream = new System.IO.MemoryStream())
                 {
-                    foreach (var photo in photos)
+                    using (var archive = new ZipArchive(memoryStream, ZipArchiveMode.Create, leaveOpen: true))
                     {
-                        // No compression: JPEGs/PNGs are already compressed, so re-compressing just burns CPU for no size benefit.
-                        var entry = archive.CreateEntry($"{photo.Stage}/{photo.FileName}", CompressionLevel.NoCompression);
-                        await using var entryStream = entry.Open();
-                        await using var sourceStream = await storage.OpenOriginalReadAsync(photo.BlobPathOriginal);
-                        await sourceStream.CopyToAsync(entryStream);
+                        foreach (var photo in photos)
+                        {
+                            // No compression: JPEGs/PNGs are already compressed, so re-compressing just burns CPU for no size benefit.
+                            var entry = archive.CreateEntry($"{photo.Stage}/{photo.FileName}", CompressionLevel.NoCompression);
+                            using var entryStream = entry.Open();
+                            await using var sourceStream = await storage.OpenOriginalReadAsync(photo.BlobPathOriginal);
+                            await sourceStream.CopyToAsync(entryStream);
+                        }
                     }
+
+                    memoryStream.Position = 0;
+                    await memoryStream.CopyToAsync(response.Body);
                 }
 
                 return Results.Empty;
