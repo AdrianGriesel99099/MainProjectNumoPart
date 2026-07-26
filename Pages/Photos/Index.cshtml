@@ -1,0 +1,35 @@
+@page
+@model MainProjectNumoPart.Pages.Photos.IndexModel
+@using MainProjectNumoPart.Models
+@{
+    ViewData["Title"] = "All photos";
+}
+
+<form method="get" class="filter-bar mb-3">
+    <select name="Stage" class="form-select form-select-sm" style="width:auto">
+        <option value="">All stages</option>
+        @foreach (var stage in Enum.GetValues<Stage>())
+        {
+            <option value="@stage" selected="@(Model.Stage == stage)">@stage</option>
+        }
+    </select>
+    <input type="text" name="VinOrReg" value="@Model.VinOrReg" placeholder="VIN or Reg" class="form-control form-control-sm" style="width:160px" />
+    <label class="small">Uploaded</label>
+    <input type="date" name="UploadedFrom" value="@Model.UploadedFrom?.ToString("yyyy-MM-dd")" class="form-control form-control-sm" style="width:150px" />
+    <input type="date" name="UploadedTo" value="@Model.UploadedTo?.ToString("yyyy-MM-dd")" class="form-control form-control-sm" style="width:150px" />
+    <label class="small">Taken</label>
+    <input type="date" name="TakenFrom" value="@Model.TakenFrom?.ToString("yyyy-MM-dd")" class="form-control form-control-sm" style="width:150px" />
+    <input type="date" name="TakenTo" value="@Model.TakenTo?.ToString("yyyy-MM-dd")" class="form-control form-control-sm" style="width:150px" />
+    <button type="submit" class="btn btn-sm btn-primary">Filter</button>
+    <a asp-page="/Photos/Index" class="btn btn-sm btn-outline-secondary">Clear</a>
+</form>
+
+<div class="photo-grid">
+    @foreach (var photo in Model.Photos)
+    {
+        <a class="photo-tile" asp-page="/Vehicles/Details" asp-route-id="@photo.VehicleId">
+            <img src="/api/photos/@photo.Id/thumbnail" loading="lazy" />
+            <span class="photo-seq">@photo.Stage</span>
+        </a>
+    }
+</div>
