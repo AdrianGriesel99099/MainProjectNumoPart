@@ -106,3 +106,17 @@ body {
 .search-form { display: flex; gap: 8px; }
 .filter-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
+.photo-tile.selected { outline: 3px solid #2f6fed; outline-offset: -3px; }
+.selection-bar {
+    position: sticky;
+    bottom: 0;
+    background: #1f2430;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    margin-top: 12px;
+    border-radius: 8px;
+}
+.flex-spacer { flex: 1; }

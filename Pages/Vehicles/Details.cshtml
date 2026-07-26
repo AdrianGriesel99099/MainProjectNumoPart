@@ -40,6 +40,17 @@
     }
 }
 
+<form id="selection-download-form" method="post" action="/api/photos/download"></form>
+
+<div id="selection-bar" class="selection-bar d-none">
+    <span id="selection-count"></span>
+    <span class="flex-spacer"></span>
+    <button type="button" id="selection-clear" class="btn btn-sm btn-outline-light">Clear</button>
+    <button type="submit" form="selection-download-form" class="btn btn-sm btn-primary">⬇ Download zip</button>
+</div>
+
+<script src="~/js/multiselect.js"></script>
+
 @if (User.IsInRole("Admin"))
 {
     <script>
