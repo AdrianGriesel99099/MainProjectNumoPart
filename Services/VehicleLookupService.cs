@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using MainProjectNumoPart.Data;
@@ -27,12 +28,28 @@ namespace MainProjectNumoPart.Services
             _db = db;
         }
 
+        // The single canonical form for a VIN or registration number: upper-cased and with ALL
+        // whitespace removed, not merely trimmed. SQLite's default collation is case-SENSITIVE, so
+        // without this "ab12cde" and "AB12CDE" compare as different vehicles — FindOrCreateAsync
+        // would happily create a second Vehicle row (and therefore a second blob folder and a second
+        // set of sequence counters) for the same physical car. Internal spacing matters for the same
+        // reason: UK-style registrations are written both "AB12CDE" and "AB12 CDE" in the wild.
+        // Every lookup, create, and filter path must run its input through THIS method so the same
+        // human input normalizes identically everywhere; PhotoFilterQuery calls it too.
+        // Returns null for input that is null/empty/whitespace-only, so callers can keep treating
+        // "no identifier supplied" separately from "identifier that matches nothing".
+        public static string? NormalizeIdentifier(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return null;
+            return string.Concat(value.Where(c => !char.IsWhiteSpace(c))).ToUpperInvariant();
+        }
+
         // Adds (or updates) the tracked entity but does not save — the caller
         // decides when to commit, since Upload needs to add Photos in the same transaction.
         public async Task<Vehicle> FindOrCreateAsync(string? vin, string? reg, CancellationToken ct = default)
         {
-            var normalizedVin = string.IsNullOrWhiteSpace(vin) ? null : vin.Trim();
-            var normalizedReg = string.IsNullOrWhiteSpace(reg) ? null : reg.Trim();
+            var normalizedVin = NormalizeIdentifier(vin);
+            var normalizedReg = NormalizeIdentifier(reg);
 
             if (normalizedVin is null && normalizedReg is null)
                 throw new ArgumentException("At least one of VIN or Reg is required.");
@@ -78,7 +95,11 @@ namespace MainProjectNumoPart.Services
 
         public async Task<Vehicle?> FindBySearchTermAsync(string term, CancellationToken ct = default)
         {
-            var normalized = term.Trim();
+            var normalized = NormalizeIdentifier(term);
+            // A blank/whitespace-only term normalizes to null. Guard explicitly: letting null through
+            // would compare `v.Vin == null`, which matches any Reg-only vehicle instead of nothing.
+            if (normalized is null) return null;
+
             return await _db.Vehicles.FirstOrDefaultAsync(v => v.Vin == normalized || v.Reg == normalized, ct);
         }
     }

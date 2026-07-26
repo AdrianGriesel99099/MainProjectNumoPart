@@ -1,5 +1,6 @@
 using System.Threading.Tasks;
 using MainProjectNumoPart.Services;
+using Microsoft.EntityFrameworkCore;
 using Xunit;
 
 namespace MainProjectNumoPart.Tests
@@ -32,6 +33,74 @@ namespace MainProjectNumoPart.Tests
             await db.SaveChangesAsync();
 
             Assert.Equal(first.Id, second.Id);
+        }
+
+        // The duplicate-vehicle bug: SQLite's default collation is case-SENSITIVE, so with only a
+        // Trim() these all created a SECOND Vehicle row for the same physical car — a second blob
+        // folder and a second set of sequence counters. UK regs really are written both ways.
+        [Theory]
+        [InlineData("ab12cde")]
+        [InlineData("AB12 CDE")]
+        [InlineData("  Ab12 cDe  ")]
+        public async Task FindOrCreateAsync_MatchesExistingVehicleDespiteCaseAndSpacing(string retypedReg)
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var service = new VehicleLookupService(db);
+
+            var first = await service.FindOrCreateAsync(null, "AB12CDE");
+            await db.SaveChangesAsync();
+
+            var second = await service.FindOrCreateAsync(null, retypedReg);
+            await db.SaveChangesAsync();
+
+            Assert.Equal(first.Id, second.Id);
+            Assert.Equal(1, await db.Vehicles.CountAsync());
+        }
+
+        [Fact]
+        public async Task FindOrCreateAsync_StoresIdentifiersInCanonicalForm()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var service = new VehicleLookupService(db);
+
+            var vehicle = await service.FindOrCreateAsync(" 1hgbh41jxmn109186 ", "ab12 cde");
+            await db.SaveChangesAsync();
+
+            Assert.Equal("1HGBH41JXMN109186", vehicle.Vin);
+            Assert.Equal("AB12CDE", vehicle.Reg);
+            // The blob folder derives from the VIN, so it inherits the canonical form too.
+            Assert.Equal("1HGBH41JXMN109186", vehicle.BlobFolderName);
+        }
+
+        [Theory]
+        [InlineData("ab12cde")]
+        [InlineData("AB12 CDE")]
+        public async Task FindBySearchTermAsync_IsCaseAndWhitespaceInsensitive(string searchTerm)
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var service = new VehicleLookupService(db);
+
+            var created = await service.FindOrCreateAsync(null, "AB12CDE");
+            await db.SaveChangesAsync();
+
+            var found = await service.FindBySearchTermAsync(searchTerm);
+
+            Assert.NotNull(found);
+            Assert.Equal(created.Id, found!.Id);
+        }
+
+        // A blank term normalizes to null. It must find nothing — NOT match the first vehicle that
+        // happens to have a null Vin (which a naive `v.Vin == null` comparison would do).
+        [Fact]
+        public async Task FindBySearchTermAsync_ReturnsNullForBlankTerm()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var service = new VehicleLookupService(db);
+
+            await service.FindOrCreateAsync(null, "AB12CDE"); // Reg-only, so Vin is null
+            await db.SaveChangesAsync();
+
+            Assert.Null(await service.FindBySearchTermAsync("   "));
         }
 
         [Fact]
