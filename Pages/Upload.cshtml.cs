@@ -4,6 +4,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using Azure;
+using Azure.Storage.Blobs.Models;
 using MainProjectNumoPart.Data;
 using MainProjectNumoPart.Models;
 using MainProjectNumoPart.Services;
@@ -104,6 +106,10 @@ namespace MainProjectNumoPart.Pages
             // index is unique specifically so the SECOND concurrent request's SaveChangesAsync fails
             // loudly instead of silently overwriting the first request's blobs — this loop is what
             // turns that loud failure into an invisible-to-the-user retry with a fresh number.
+            // Blob writes are guarded the same way: they're create-only, so a colliding write also
+            // fails loudly (409) rather than overwriting, and lands in this same catch. Both blob
+            // uploads and the SaveChangesAsync sit inside one try per attempt precisely so either
+            // symptom triggers the same cleanup-and-retry.
             const int maxAttempts = 3;
             for (var attempt = 1; attempt <= maxAttempts; attempt++)
             {
@@ -204,15 +210,18 @@ namespace MainProjectNumoPart.Pages
         // (almost certainly the one that caused this very failure) has already claimed it, so this
         // attempt leaves it alone — worst case a harmless untouched blob, never a deleted live one.
         //
-        // Known residual gap, not closed by this guard, flagged rather than silently fixed: blob
-        // uploads themselves aren't isolated per attempt — both requests can genuinely write bytes
-        // to the identical path before either commits. If the LOSING request's write physically
-        // lands after the WINNING request's, the winner's now-permanent Photo row can end up
-        // pointing at the loser's image content instead of its own (wrong photo, not a missing
-        // one). Fully closing that needs a real design choice (e.g. per-attempt staging paths
-        // finalized only after a successful commit, or conditional/ETag-guarded blob uploads that
-        // reject an overwrite and turn this into another catchable, retryable conflict) — left for
-        // that decision rather than invented here.
+        // The "wrong photo" race this guard alone did NOT close is now closed at the blob layer.
+        // Blob uploads are create-only (IfNoneMatch = ETag.All in BlobPhotoStorage.UploadAsync), so
+        // two requests can no longer both write bytes to the identical path: the second write is
+        // rejected with 409 BlobAlreadyExists before it can land on top of the first. That used to
+        // mean the winner's permanent Photo row could end up referencing the loser's image content,
+        // silently and with nothing to detect it. Now the losing write is simply another conflict
+        // IsSequenceConflict recognises, so it flows through this same cleanup-and-retry path and
+        // comes back with a freshly-allocated sequence number and its own untouched blob path.
+        //
+        // One consequence worth knowing: because the loser is rejected BEFORE its upload call
+        // returns, that path never enters uploadedBlobPaths, so there is correspondingly nothing to
+        // clean up for it — only paths this attempt genuinely created are ever passed here.
         private async Task CleanUpBlobsAsync(List<(string original, string? thumbnail)> uploadedBlobPaths)
         {
             foreach (var (original, thumbnail) in uploadedBlobPaths)
@@ -226,13 +235,31 @@ namespace MainProjectNumoPart.Pages
             }
         }
 
-        // EF Core wraps SQLite constraint violations in DbUpdateException; check the underlying
-        // SqliteException's EXTENDED error code (2067 = SQLITE_CONSTRAINT_UNIQUE) specifically —
-        // not just the primary code (19 = SQLITE_CONSTRAINT, which also covers foreign-key/not-null/
-        // check violations that should NOT be silently retried, since retrying wouldn't fix them.
+        // Two different symptoms of the SAME underlying event — another concurrent request already
+        // claimed this vehicle+stage+sequence number — and a retry with a fresh number fixes both:
+        //
+        //  1. The DB unique index rejecting SaveChangesAsync. EF Core wraps SQLite constraint
+        //     violations in DbUpdateException; check the underlying SqliteException's EXTENDED
+        //     error code (2067 = SQLITE_CONSTRAINT_UNIQUE) specifically — not just the primary code
+        //     (19 = SQLITE_CONSTRAINT, which also covers foreign-key/not-null/check violations that
+        //     should NOT be silently retried, since retrying wouldn't fix them).
+        //  2. The blob layer rejecting a create-only upload because something is already at that
+        //     path (see BlobPhotoStorage.UploadAsync). Matched with the same precision as the
+        //     SQLite check — this exact status AND error code, not "any RequestFailedException" —
+        //     so a 403, a 500, or a transport fault still propagates instead of quietly burning
+        //     retry attempts on something a fresh sequence number cannot fix.
+        //
+        // Both are needed, and neither subsumes the other: two colliding uploads with DIFFERENT
+        // file extensions produce different blob paths for the same sequence number, so they sail
+        // past the blob check and are caught only by (1); two with the same extension collide at
+        // the blob layer first and are caught by (2) before any bytes can be overwritten.
         private static bool IsSequenceConflict(Exception ex)
         {
-            return ex is DbUpdateException { InnerException: SqliteException { SqliteExtendedErrorCode: 2067 } };
+            if (ex is DbUpdateException { InnerException: SqliteException { SqliteExtendedErrorCode: 2067 } })
+                return true;
+
+            return ex is RequestFailedException { Status: 409 } blobConflict
+                && blobConflict.ErrorCode == BlobErrorCode.BlobAlreadyExists.ToString();
         }
     }
 }

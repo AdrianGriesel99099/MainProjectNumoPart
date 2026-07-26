@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using Azure;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using Azure.Storage.Sas;
@@ -30,13 +31,26 @@ namespace MainProjectNumoPart.Services
         public Task UploadThumbnailAsync(string blobPath, Stream content, string contentType, CancellationToken ct = default)
             => UploadAsync(_thumbnails, blobPath, content, contentType, ct);
 
+        // Create-only, never overwrite. Photos are immutable once created: the only write path in
+        // the whole app is Pages/Upload.cshtml.cs, and the only other mutation is an outright
+        // delete — nothing legitimately re-uploads to a path that already holds a blob, because
+        // every non-colliding upload computes a fresh (vehicle, stage, sequence, extension) path.
+        //
+        // IfNoneMatch = ETag.All makes the service reject the write with 409 BlobAlreadyExists if
+        // anything is already at that exact path. That converts the one case where a path IS reused
+        // — two concurrent uploads racing to the same vehicle+stage and landing on the same
+        // sequence number — from a silent overwrite into a loud, catchable error. Without it the
+        // loser's bytes could land on top of the winner's, leaving the winner's committed Photo row
+        // pointing at somebody else's image: the wrong photo, with nothing to detect it. The caller
+        // treats this 409 as a retryable sequence conflict (see IsSequenceConflict there).
         private static async Task UploadAsync(BlobContainerClient container, string blobPath, Stream content, string contentType, CancellationToken ct)
         {
             await container.CreateIfNotExistsAsync(cancellationToken: ct);
             var blob = container.GetBlobClient(blobPath);
             await blob.UploadAsync(content, new BlobUploadOptions
             {
-                HttpHeaders = new BlobHttpHeaders { ContentType = contentType }
+                HttpHeaders = new BlobHttpHeaders { ContentType = contentType },
+                Conditions = new BlobRequestConditions { IfNoneMatch = ETag.All }
             }, ct);
         }
 
