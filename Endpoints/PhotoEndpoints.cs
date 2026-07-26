@@ -56,6 +56,19 @@ namespace MainProjectNumoPart.Endpoints
 
                 var photos = await db.Photos.Where(p => ids.Contains(p.Id)).ToListAsync();
 
+                // The 200-ID cap above bounds the COUNT, not the bytes: at the app's 25MB per-file
+                // limit, 200 photos is still ~5GB, and the whole archive is buffered in a
+                // MemoryStream below (required to avoid Kestrel's sync-I/O restriction). SizeBytes
+                // is already recorded per row, so the real memory cost is knowable up front —
+                // reject it here rather than OOM the process mid-stream.
+                var totalBytes = photos.Sum(p => p.SizeBytes);
+                const long maxTotalBytes = 500L * 1024 * 1024;
+                if (totalBytes > maxTotalBytes)
+                {
+                    return Results.BadRequest(
+                        $"Selected photos total {totalBytes / (1024 * 1024)}MB, which exceeds the 500MB download limit. Select fewer photos.");
+                }
+
                 response.ContentType = "application/zip";
                 response.Headers.ContentDisposition = $"attachment; filename=\"photos-{DateTime.UtcNow:yyyyMMdd-HHmmss}.zip\"";
 
@@ -74,6 +87,10 @@ namespace MainProjectNumoPart.Endpoints
                     }
 
                     memoryStream.Position = 0;
+                    // The archive is fully buffered by this point, so its exact length is known —
+                    // declaring it lets the browser show a real progress bar instead of falling
+                    // back to chunked transfer encoding with an unknown total.
+                    response.ContentLength = memoryStream.Length;
                     await memoryStream.CopyToAsync(response.Body);
                 }
 
