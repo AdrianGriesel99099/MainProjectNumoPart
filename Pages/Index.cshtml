@@ -1,10 +1,34 @@
-﻿@page
-@model IndexModel
+@* Pages/Index.cshtml *@
+@page
+@model MainProjectNumoPart.Pages.IndexModel
 @{
-    ViewData["Title"] = "Home page";
+    ViewData["Title"] = "Search";
 }
 
-<div class="text-center">
-    <h1 class="display-4">Welcome</h1>
-    <p>Learn about <a href="https://learn.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
+<div class="search-hero">
+    <form method="get" class="search-form">
+        <input type="text" name="Search" value="@Model.Search" class="form-control form-control-lg"
+               placeholder="Search by VIN or registration number" autofocus />
+        <button type="submit" class="btn btn-primary btn-lg">Search</button>
+    </form>
+    @if (Model.NotFoundMessage is not null)
+    {
+        <p class="text-danger mt-2">@Model.NotFoundMessage</p>
+    }
 </div>
+
+<h3 class="mt-4">Recently added vehicles</h3>
+<table class="table">
+    <thead><tr><th>VIN</th><th>Reg</th><th>Make/Model</th><th>Added</th></tr></thead>
+    <tbody>
+    @foreach (var vehicle in Model.RecentVehicles)
+    {
+        <tr>
+            <td><a asp-page="/Vehicles/Details" asp-route-id="@vehicle.Id">@vehicle.Vin</a></td>
+            <td><a asp-page="/Vehicles/Details" asp-route-id="@vehicle.Id">@vehicle.Reg</a></td>
+            <td>@vehicle.MakeModel</td>
+            <td>@vehicle.CreatedAtUtc.ToString("d MMM yyyy")</td>
+        </tr>
+    }
+    </tbody>
+</table>

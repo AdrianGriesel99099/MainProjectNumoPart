@@ -1,0 +1,59 @@
+@* Pages/Vehicles/Details.cshtml *@
+@page "{id:int}"
+@model MainProjectNumoPart.Pages.Vehicles.DetailsModel
+@using MainProjectNumoPart.Models
+@{
+    ViewData["Title"] = Model.Vehicle.Vin ?? Model.Vehicle.Reg;
+}
+
+<div class="job-head">
+    <div>
+        <div class="job-plate">@(Model.Vehicle.MakeModel ?? "Vehicle") — @Model.Vehicle.Reg</div>
+        <div class="job-vin">@Model.Vehicle.Vin</div>
+    </div>
+    <a class="btn btn-primary" asp-page="/Upload" asp-route-vehicleId="@Model.Vehicle.Id">+ Upload</a>
+</div>
+
+@foreach (var stage in Enum.GetValues<Stage>())
+{
+    var photos = Model.PhotosByStage[stage].ToList();
+    <h3 class="stage-heading">@stage <span class="stage-count">(@photos.Count)</span></h3>
+    @if (photos.Count == 0)
+    {
+        <p class="text-muted">No photos yet.</p>
+    }
+    else
+    {
+        <div class="photo-strip">
+            @foreach (var photo in photos)
+            {
+                <div class="photo-tile" data-photo-id="@photo.Id">
+                    <img src="/api/photos/@photo.Id/thumbnail" loading="lazy" />
+                    <span class="photo-seq">@photo.SequenceNumber.ToString("000")</span>
+                    @if (User.IsInRole("Admin"))
+                    {
+                        <button type="button" class="photo-delete" data-photo-id="@photo.Id" title="Delete">×</button>
+                    }
+                </div>
+            }
+        </div>
+    }
+}
+
+@if (User.IsInRole("Admin"))
+{
+    <script>
+        document.querySelectorAll('.photo-delete').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                if (!confirm('Delete this photo? This cannot be undone.')) return;
+                const id = btn.dataset.photoId;
+                const response = await fetch(`/api/photos/${id}`, { method: 'DELETE' });
+                if (response.ok) {
+                    document.querySelector(`.photo-tile[data-photo-id="${id}"]`).remove();
+                } else {
+                    alert('Delete failed.');
+                }
+            });
+        });
+    </script>
+}

@@ -27,6 +27,19 @@ namespace MainProjectNumoPart.Endpoints
                 var url = await storage.GetOriginalReadUrlAsync(photo.BlobPathOriginal, SasLifetime);
                 return Results.Redirect(url.ToString());
             });
+
+            group.MapDelete("/{id:int}", async (int id, Data.AppDbContext db, Services.IPhotoStorage storage) =>
+            {
+                var photo = await db.Photos.FindAsync(id);
+                if (photo is null) return Results.NotFound();
+
+                await storage.DeleteOriginalAsync(photo.BlobPathOriginal);
+                await storage.DeleteThumbnailAsync(photo.BlobPathThumbnail);
+                db.Photos.Remove(photo);
+                await db.SaveChangesAsync();
+
+                return Results.NoContent();
+            }).RequireAuthorization(policy => policy.RequireRole("Admin"));
         }
     }
 }

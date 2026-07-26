@@ -1,20 +1,50 @@
+using System.Linq;
+using System.Threading.Tasks;
+using MainProjectNumoPart.Data;
+using MainProjectNumoPart.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.EntityFrameworkCore;
 
 namespace MainProjectNumoPart.Pages
 {
+    [Authorize]
     public class IndexModel : PageModel
     {
-        private readonly ILogger<IndexModel> _logger;
+        private readonly AppDbContext _db;
+        private readonly Services.VehicleLookupService _vehicles;
 
-        public IndexModel(ILogger<IndexModel> logger)
+        public IndexModel(AppDbContext db, Services.VehicleLookupService vehicles)
         {
-            _logger = logger;
+            _db = db;
+            _vehicles = vehicles;
         }
 
-        public void OnGet()
-        {
+        [BindProperty(SupportsGet = true)]
+        public string? Search { get; set; }
 
+        public string? NotFoundMessage { get; set; }
+        public System.Collections.Generic.List<Vehicle> RecentVehicles { get; set; } = new();
+
+        public async Task<IActionResult> OnGetAsync()
+        {
+            if (!string.IsNullOrWhiteSpace(Search))
+            {
+                var vehicle = await _vehicles.FindBySearchTermAsync(Search);
+                if (vehicle is not null)
+                {
+                    return RedirectToPage("/Vehicles/Details", new { id = vehicle.Id });
+                }
+                NotFoundMessage = $"No vehicle found matching \"{Search}\".";
+            }
+
+            RecentVehicles = await _db.Vehicles
+                .OrderByDescending(v => v.CreatedAtUtc)
+                .Take(10)
+                .ToListAsync();
+
+            return Page();
         }
     }
 }
