@@ -2,6 +2,7 @@ using Azure.Storage.Blobs;
 using MainProjectNumoPart.Data;
 using MainProjectNumoPart.Endpoints;
 using MainProjectNumoPart.Services;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Identity;
@@ -45,6 +46,23 @@ builder.Services.ConfigureApplicationCookie(options =>
     options.LoginPath = "/Account/Login";
     options.AccessDeniedPath = "/Account/AccessDenied";
 });
+
+// Production only: Container Apps' scale-to-zero destroys and re-creates the container on every
+// cold start. Without persisting the Data Protection key ring somewhere durable, each cold start
+// generates a fresh key, invalidating every existing auth cookie and antiforgery token — forcing
+// re-authentication constantly. Persisted to the app-data blob container (same storage account
+// and Managed Identity already used for photos) and encrypted at rest with a Key Vault-held key.
+// Local dev deliberately skips this and uses ASP.NET Core's default local-filesystem key storage.
+if (!builder.Environment.IsDevelopment())
+{
+    var credential = new Azure.Identity.DefaultAzureCredential();
+    var keysBlobUri = new Uri($"{builder.Configuration["BlobStorage:ServiceUri"]!.TrimEnd('/')}/app-data/keys.xml");
+    var dataProtectionKeyUri = new Uri(builder.Configuration["KeyVault:DataProtectionKeyUri"]!);
+
+    builder.Services.AddDataProtection()
+        .PersistKeysToAzureBlobStorage(keysBlobUri, credential)
+        .ProtectKeysWithAzureKeyVault(dataProtectionKeyUri, credential);
+}
 
 builder.Services.Configure<FormOptions>(options =>
 {
