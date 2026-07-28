@@ -2,6 +2,7 @@ using Azure.Storage.Blobs;
 using MainProjectNumoPart.Data;
 using MainProjectNumoPart.Endpoints;
 using MainProjectNumoPart.Services;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -62,6 +63,23 @@ builder.WebHost.ConfigureKestrel(options =>
 });
 
 var app = builder.Build();
+
+// Azure Container Apps terminates TLS at its ingress and forwards plain HTTP to the container,
+// setting X-Forwarded-Proto to record the original scheme. Without trusting that header, Kestrel
+// sees every request as HTTP and UseHttpsRedirection below redirects it to https:// — which the
+// client re-requests through the same TLS-terminating ingress, forwarded as HTTP again: an
+// infinite redirect loop. KnownNetworks/KnownProxies must be cleared via .Clear() (an empty
+// collection initializer here would NOT clear ASP.NET Core's built-in loopback defaults — it
+// just adds zero extra items to them) because Container Apps' ingress isn't a fixed, known IP the
+// way an on-prem reverse proxy would be — this is the documented pattern for exactly this hosting
+// model (Container Apps, App Service, and similar PaaS ingress).
+var forwardedHeadersOptions = new ForwardedHeadersOptions
+{
+    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+};
+forwardedHeadersOptions.KnownNetworks.Clear();
+forwardedHeadersOptions.KnownProxies.Clear();
+app.UseForwardedHeaders(forwardedHeadersOptions);
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
