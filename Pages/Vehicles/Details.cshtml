@@ -11,10 +11,13 @@
         <div class="job-plate">@(Model.Vehicle.MakeModel ?? "Vehicle") — @Model.Vehicle.Reg</div>
         <div class="job-vin">@Model.Vehicle.Vin</div>
     </div>
-    @if (User.CanUpload())
-    {
-        <a class="btn btn-primary" asp-page="/Upload" asp-route-vehicleId="@Model.Vehicle.Id">+ Upload</a>
-    }
+    <div class="d-flex gap-2">
+        @if (User.CanUpload())
+        {
+            <a class="btn btn-outline-secondary" asp-page="/Vehicles/Edit" asp-route-id="@Model.Vehicle.Id">Edit details</a>
+            <a class="btn btn-primary" asp-page="/Upload" asp-route-vehicleId="@Model.Vehicle.Id">+ Upload</a>
+        }
+    </div>
 </div>
 
 @foreach (var stage in Enum.GetValues<Stage>())

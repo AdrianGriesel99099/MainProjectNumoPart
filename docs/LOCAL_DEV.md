@@ -121,6 +121,20 @@ After any significant change, confirm end-to-end by hand:
 - [ ] Try to demote yourself, and try to demote the only Admin — both are refused with an
       explanatory message.
 
+### Editing a vehicle
+
+- [ ] From a vehicle page, **Edit details** — VIN, registration and make/model are prefilled
+      (make/model has no other way to be set).
+- [ ] Change the VIN to one another vehicle already uses → refused with a clear message, and both
+      records are left alone.
+- [ ] Clear both the VIN and registration → refused; a vehicle must keep at least one.
+- [ ] Enter a lowercase, spaced registration → saved normalised (`zz11 aaa` becomes `ZZ11AAA`).
+- [ ] **Change the VIN on a vehicle that already has photos, then reload the page — the thumbnails
+      must still render.** Existing photos keep their original blob paths by design; the folder
+      name is an immutable storage key, so it stops matching the VIN after a correction and that
+      is expected.
+- [ ] As a Viewer, `/Vehicles/Edit/{id}` → Access denied, and no Edit button is shown.
+
 ### Vehicle deletion
 
 - [ ] Wrong confirmation text → inline error, and every blob is still in Azurite.

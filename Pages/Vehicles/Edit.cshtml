@@ -1,0 +1,51 @@
+@* Pages/Vehicles/Edit.cshtml *@
+@page "{id:int}"
+@model MainProjectNumoPart.Pages.Vehicles.EditModel
+@{
+    ViewData["Title"] = "Edit vehicle";
+}
+
+<h2>Edit vehicle</h2>
+
+@if (Model.ErrorMessage is not null)
+{
+    <div class="alert alert-danger col-md-6">@Model.ErrorMessage</div>
+}
+
+<form method="post" class="col-md-6">
+    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+    <div class="mb-3">
+        <label asp-for="Input.Vin" class="form-label">VIN</label>
+        <input asp-for="Input.Vin" class="form-control" autocomplete="off" />
+        <span asp-validation-for="Input.Vin" class="text-danger"></span>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="Input.Reg" class="form-label">Registration</label>
+        <input asp-for="Input.Reg" class="form-control" autocomplete="off" />
+        <span asp-validation-for="Input.Reg" class="text-danger"></span>
+    </div>
+
+    <div class="mb-3">
+        <label asp-for="Input.MakeModel" class="form-label"></label>
+        <input asp-for="Input.MakeModel" class="form-control" autocomplete="off"
+               placeholder="e.g. Toyota Hilux 2.4 GD-6" />
+        <span asp-validation-for="Input.MakeModel" class="text-danger"></span>
+    </div>
+
+    <div class="form-text mb-3">
+        A vehicle needs a VIN, a registration, or both. Spacing and capitalisation are normalised
+        automatically, so <code>ab12 cde</code> and <code>AB12CDE</code> are the same registration.
+        @if (Model.PhotoCount > 0)
+        {
+            <text>
+                The @Model.PhotoCount photo@(Model.PhotoCount == 1 ? "" : "s") already uploaded to this
+                vehicle stay attached to it, and keep their existing filenames.
+            </text>
+        }
+    </div>
+
+    <button type="submit" class="btn btn-primary">Save changes</button>
+    <a class="btn btn-outline-secondary" asp-page="/Vehicles/Details" asp-route-id="@Model.Id">Cancel</a>
+</form>

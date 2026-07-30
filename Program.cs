@@ -35,6 +35,7 @@ builder.Services.AddScoped<VehicleLookupService>();
 builder.Services.AddScoped<PhotoSequenceAllocator>();
 builder.Services.AddScoped<UserAdminService>();
 builder.Services.AddScoped<VehicleDeletionService>();
+builder.Services.AddScoped<VehicleEditService>();
 
 // BlobServiceClient is a singleton (thread-safe, expensive to construct); IPhotoStorage
 // wraps it and is registered per-scope to match the other services above.
