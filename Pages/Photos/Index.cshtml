@@ -28,7 +28,8 @@
     @foreach (var photo in Model.Photos)
     {
         <a class="photo-tile" asp-page="/Vehicles/Details" asp-route-id="@photo.VehicleId">
-            <img src="/api/photos/@photo.Id/thumbnail" loading="lazy" />
+            <img src="/api/photos/@photo.Id/thumbnail" loading="lazy"
+                 alt="@photo.Stage photo for @(photo.Vehicle.Reg ?? photo.Vehicle.Vin)" />
             <span class="photo-seq">@photo.Stage</span>
         </a>
     }

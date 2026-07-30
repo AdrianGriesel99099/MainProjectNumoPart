@@ -34,7 +34,8 @@
             @foreach (var photo in photos)
             {
                 <div class="photo-tile" data-photo-id="@photo.Id">
-                    <img src="/api/photos/@photo.Id/thumbnail" loading="lazy" />
+                    <img src="/api/photos/@photo.Id/thumbnail" loading="lazy"
+                         alt="@stage photo @photo.SequenceNumber.ToString("000") for @(Model.Vehicle.Reg ?? Model.Vehicle.Vin)" />
                     <span class="photo-seq">@photo.SequenceNumber.ToString("000")</span>
                     @if (User.IsAdmin())
                     {
