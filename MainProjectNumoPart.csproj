@@ -28,6 +28,7 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.29" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.29" />
     <!-- Pinned below v4: starting with 4.0.0, SixLabors added a build-time license-key check
          (SixLaborsLicensing.targets fails CoreCompile with "No Six Labors license found" unless
          $(SixLaborsLicenseKey)/a sixlabors.lic file is present). 3.1.12 is the last release under

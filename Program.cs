@@ -13,8 +13,23 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddRazorPages();
 
+// Local dev / Azurite: SQLite, a plain file, zero setup.
+// Production: Azure SQL Database. SQLite's locking model doesn't work reliably over a network
+// file share (confirmed against Azure Files — every write hit "database is locked"), so
+// production uses a real managed database instead. Authentication=Active Directory Managed
+// Identity in the connection string means Microsoft.Data.SqlClient acquires and refreshes the
+// token itself — no credential of any kind is stored anywhere for this.
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlite(builder.Configuration.GetConnectionString("Default") ?? "Data Source=app.db"));
+{
+    if (builder.Environment.IsDevelopment())
+    {
+        options.UseSqlite(builder.Configuration.GetConnectionString("Default") ?? "Data Source=app.db");
+    }
+    else
+    {
+        options.UseSqlServer(builder.Configuration.GetConnectionString("Default"));
+    }
+});
 
 builder.Services.AddScoped<VehicleLookupService>();
 builder.Services.AddScoped<PhotoSequenceAllocator>();
