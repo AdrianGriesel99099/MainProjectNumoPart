@@ -25,16 +25,19 @@
                         @* Deliberately linked with NO vehicleId route value: the primary real-world
                            workflow is photographing a car that isn't in the system yet, so Upload has
                            to be reachable from anywhere without first finding an existing vehicle. *@
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-page="/Upload">Upload</a>
-                        </li>
+                        @if (User.CanUpload())
+                        {
+                            <li class="nav-item">
+                                <a class="nav-link text-dark" asp-area="" asp-page="/Upload">Upload</a>
+                            </li>
+                        }
                         <li class="nav-item">
                             <a class="nav-link text-dark" asp-area="" asp-page="/Photos/Index">All Photos</a>
                         </li>
-                        @if (User.IsInRole("Admin"))
+                        @if (User.IsAdmin())
                         {
                             <li class="nav-item">
-                                <a class="nav-link text-dark" asp-area="" asp-page="/Admin/CreateUser">Create User</a>
+                                <a class="nav-link text-dark" asp-area="" asp-page="/Admin/Users">Users</a>
                             </li>
                         }
                         <li class="nav-item">

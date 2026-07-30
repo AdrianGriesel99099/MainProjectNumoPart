@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Azure;
 using Azure.Storage.Blobs.Models;
+using MainProjectNumoPart.Authorization;
 using MainProjectNumoPart.Data;
 using MainProjectNumoPart.Models;
 using MainProjectNumoPart.Services;
@@ -18,7 +19,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace MainProjectNumoPart.Pages
 {
-    [Authorize]
+    [Authorize(Roles = Roles.StaffOrAdmin)]
     public class UploadModel : PageModel
     {
         private static readonly HashSet<string> AllowedContentTypes = new(StringComparer.OrdinalIgnoreCase)
@@ -49,14 +50,52 @@ namespace MainProjectNumoPart.Pages
         [BindProperty] public DateTime? DateTaken { get; set; }
         [BindProperty] public List<IFormFile> Files { get; set; } = new();
 
+        // SupportsGet binds this from ?vehicleId=N when arriving from a vehicle page AND from the
+        // hidden form field on POST — which is what keeps the context banner alive when validation
+        // fails and the page re-renders.
+        [BindProperty(SupportsGet = true)] public int? VehicleId { get; set; }
+
+        // Display only. Never used to resolve which vehicle the photos are filed under — see the
+        // note at the FindOrCreateAsync call below.
+        public Vehicle? ContextVehicle { get; set; }
+
         public string? ErrorMessage { get; set; }
 
-        public void OnGet(int? vehicleId)
+        public async Task OnGetAsync()
         {
+            await LoadVehicleContextAsync();
+
+            if (ContextVehicle is null)
+            {
+                // Unknown or absent id: fall back to the blank form exactly as before. Clearing
+                // VehicleId stops a stale value riding along in the hidden field. The nav-bar
+                // Upload link deliberately passes no vehicleId, and that path must not change.
+                VehicleId = null;
+                return;
+            }
+
+            // Prefill on GET only. On POST these come from the form, because the user is allowed
+            // to correct them.
+            Vin = ContextVehicle.Vin;
+            Reg = ContextVehicle.Reg;
+        }
+
+        private async Task LoadVehicleContextAsync()
+        {
+            if (VehicleId is null) return;
+
+            ContextVehicle = await _db.Vehicles
+                .AsNoTracking()
+                .FirstOrDefaultAsync(v => v.Id == VehicleId.Value);
         }
 
         public async Task<IActionResult> OnPostAsync()
         {
+            // Loaded once at the top so every `return Page()` below re-renders with the context
+            // banner intact. Doing it per-branch would mean five call sites and a near-certainty
+            // that a future sixth one forgets.
+            await LoadVehicleContextAsync();
+
             if (string.IsNullOrWhiteSpace(Vin) && string.IsNullOrWhiteSpace(Reg))
             {
                 ErrorMessage = "Enter a VIN, a registration number, or both.";
@@ -87,6 +126,10 @@ namespace MainProjectNumoPart.Pages
             Vehicle vehicle;
             try
             {
+                // Resolution is by the SUBMITTED TEXT, never by VehicleId — VehicleId is display
+                // context only. That's intentional: arriving from a vehicle page and correcting a
+                // typo in the VIN must re-file the photos under the corrected vehicle, which is
+                // exactly what leaving the fields editable is for.
                 vehicle = await _vehicles.FindOrCreateAsync(Vin, Reg);
             }
             catch (VehicleIdentifierConflictException ex)

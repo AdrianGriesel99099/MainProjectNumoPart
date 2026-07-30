@@ -33,6 +33,8 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 builder.Services.AddScoped<VehicleLookupService>();
 builder.Services.AddScoped<PhotoSequenceAllocator>();
+builder.Services.AddScoped<UserAdminService>();
+builder.Services.AddScoped<VehicleDeletionService>();
 
 // BlobServiceClient is a singleton (thread-safe, expensive to construct); IPhotoStorage
 // wraps it and is registered per-scope to match the other services above.
@@ -60,6 +62,17 @@ builder.Services.ConfigureApplicationCookie(options =>
 {
     options.LoginPath = "/Account/Login";
     options.AccessDeniedPath = "/Account/AccessDenied";
+});
+
+// Role claims are baked into the auth cookie at sign-in. RemoveFromRolesAsync/AddToRoleAsync do
+// NOT regenerate the security stamp on their own, and this validator's default re-check interval
+// is 30 MINUTES — so without this (plus the UpdateSecurityStampAsync call in UserAdminService),
+// an admin you just demoted keeps full admin powers, including vehicle deletion, for up to half
+// an hour. That is precisely the scenario you demote someone for. One minute bounds the window;
+// at this app's user count it costs one indexed read per active user per minute.
+builder.Services.Configure<SecurityStampValidatorOptions>(options =>
+{
+    options.ValidationInterval = TimeSpan.FromMinutes(1);
 });
 
 // Production only: Container Apps' scale-to-zero destroys and re-creates the container on every
@@ -133,6 +146,7 @@ app.UseAuthorization();
 app.MapRazorPages();
 
 app.MapPhotoEndpoints();
+app.MapVehicleEndpoints();
 
 await AdminSeeder.SeedInitialAdminAsync(app.Services);
 

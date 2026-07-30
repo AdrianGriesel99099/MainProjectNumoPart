@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
+using MainProjectNumoPart.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,9 +17,16 @@ namespace MainProjectNumoPart.Services
             var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
             var config = scope.ServiceProvider.GetRequiredService<IConfiguration>();
 
-            if (!await roleManager.RoleExistsAsync("Admin"))
+            // Role creation MUST stay above the "already bootstrapped" early-return below. This
+            // is the entire upgrade path for an existing deployment: production already has
+            // users, so a seeder that returned first would never create Viewer or Staff, and
+            // they'd be unassignable forever. Pinned by AdminSeederTests.
+            foreach (var role in Roles.All)
             {
-                await roleManager.CreateAsync(new IdentityRole("Admin"));
+                if (!await roleManager.RoleExistsAsync(role))
+                {
+                    await roleManager.CreateAsync(new IdentityRole(role));
+                }
             }
 
             if (userManager.Users.Any())
@@ -44,7 +52,7 @@ namespace MainProjectNumoPart.Services
                     "Failed to seed initial admin: " + string.Join("; ", result.Errors.Select(e => e.Description)));
             }
 
-            await userManager.AddToRoleAsync(admin, "Admin");
+            await userManager.AddToRoleAsync(admin, Roles.Admin);
         }
     }
 }

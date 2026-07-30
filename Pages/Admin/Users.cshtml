@@ -1,0 +1,103 @@
+@* Pages/Admin/Users.cshtml *@
+@page
+@model MainProjectNumoPart.Pages.Admin.UsersModel
+@{
+    ViewData["Title"] = "Users";
+}
+
+<h2>Users</h2>
+
+@if (Model.StatusMessage is not null)
+{
+    <div class="alert @(Model.StatusIsError ? "alert-danger" : "alert-success")">@Model.StatusMessage</div>
+}
+
+<table class="table align-middle">
+    <thead>
+        <tr>
+            <th>Email</th>
+            <th>Role</th>
+            <th>Change role</th>
+        </tr>
+    </thead>
+    <tbody>
+    @foreach (var user in Model.Users)
+    {
+        var isSelf = user.Id == Model.CurrentUserId;
+        <tr>
+            <td>
+                @user.Email
+                @if (isSelf)
+                {
+                    <span class="badge bg-secondary ms-1">you</span>
+                }
+            </td>
+            <td>
+                @if (user.Role is null)
+                {
+                    <span class="text-muted">None</span>
+                    <div class="small text-muted">no role — browse only</div>
+                }
+                else
+                {
+                    @user.Role
+                }
+            </td>
+            <td>
+                @* The server-side guards in UserAdminService are the real control. Restricting
+                   your own row to Admin here just avoids offering an action that always fails. *@
+                <form method="post" asp-page-handler="ChangeRole" class="d-flex gap-2">
+                    <input type="hidden" name="userId" value="@user.Id" />
+                    <select name="role" class="form-select form-select-sm" style="width:auto">
+                        @if (user.Role is null)
+                        {
+                            <option value="" disabled selected>Choose…</option>
+                        }
+                        @foreach (var role in Roles.All)
+                        {
+                            if (isSelf && role != Roles.Admin)
+                            {
+                                continue;
+                            }
+                            <option value="@role" selected="@(user.Role == role)">@role</option>
+                        }
+                    </select>
+                    <button type="submit" class="btn btn-sm btn-outline-primary">Save</button>
+                </form>
+            </td>
+        </tr>
+    }
+    </tbody>
+</table>
+
+<h3 class="mt-4">Create account</h3>
+
+<form method="post" asp-page-handler="Create" class="col-md-4">
+    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+    <div class="mb-3">
+        <label asp-for="Input.Email" class="form-label"></label>
+        <input asp-for="Input.Email" class="form-control" autocomplete="off" />
+        <span asp-validation-for="Input.Email" class="text-danger"></span>
+    </div>
+    <div class="mb-3">
+        <label asp-for="Input.TemporaryPassword" class="form-label"></label>
+        @* autocomplete="new-password" stops the browser offering to save this as the signed-in
+           admin's own credential. *@
+        <input asp-for="Input.TemporaryPassword" class="form-control" autocomplete="new-password" />
+        <span asp-validation-for="Input.TemporaryPassword" class="text-danger"></span>
+    </div>
+    <div class="mb-3">
+        <label asp-for="Input.Role" class="form-label">Role</label>
+        <select asp-for="Input.Role" class="form-select">
+            @foreach (var role in Roles.All)
+            {
+                <option value="@role">@role</option>
+            }
+        </select>
+        <div class="form-text">
+            Viewer: search, browse and download. Staff: also upload. Admin: also delete photos and
+            vehicles, and manage accounts.
+        </div>
+    </div>
+    <button type="submit" class="btn btn-primary">Create account</button>
+</form>

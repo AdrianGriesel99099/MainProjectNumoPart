@@ -1,3 +1,4 @@
+using MainProjectNumoPart.Authorization;
 using MainProjectNumoPart.Data;
 using MainProjectNumoPart.Services;
 using Microsoft.EntityFrameworkCore;
@@ -41,7 +42,7 @@ namespace MainProjectNumoPart.Endpoints
                 await db.SaveChangesAsync();
 
                 return Results.NoContent();
-            }).RequireAuthorization(policy => policy.RequireRole("Admin"));
+            }).RequireAuthorization(policy => policy.RequireRole(Roles.Admin));
 
             group.MapPost("/download", async (HttpRequest request, HttpResponse response, Data.AppDbContext db, Services.IPhotoStorage storage) =>
             {

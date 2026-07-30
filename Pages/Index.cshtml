@@ -17,7 +17,10 @@
            obvious next step (document it) instead of a dead end. *@
         <p class="text-danger mt-2">
             @Model.NotFoundMessage
-            <a asp-page="/Upload">Upload photos for a new vehicle</a>
+            @if (User.CanUpload())
+            {
+                <a asp-page="/Upload">Upload photos for a new vehicle</a>
+            }
         </p>
     }
 </div>

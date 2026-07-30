@@ -11,7 +11,10 @@
         <div class="job-plate">@(Model.Vehicle.MakeModel ?? "Vehicle") — @Model.Vehicle.Reg</div>
         <div class="job-vin">@Model.Vehicle.Vin</div>
     </div>
-    <a class="btn btn-primary" asp-page="/Upload" asp-route-vehicleId="@Model.Vehicle.Id">+ Upload</a>
+    @if (User.CanUpload())
+    {
+        <a class="btn btn-primary" asp-page="/Upload" asp-route-vehicleId="@Model.Vehicle.Id">+ Upload</a>
+    }
 </div>
 
 @foreach (var stage in Enum.GetValues<Stage>())
@@ -30,7 +33,7 @@
                 <div class="photo-tile" data-photo-id="@photo.Id">
                     <img src="/api/photos/@photo.Id/thumbnail" loading="lazy" />
                     <span class="photo-seq">@photo.SequenceNumber.ToString("000")</span>
-                    @if (User.IsInRole("Admin"))
+                    @if (User.IsAdmin())
                     {
                         <button type="button" class="photo-delete" data-photo-id="@photo.Id" title="Delete">×</button>
                     }
@@ -51,7 +54,7 @@
 
 <script src="~/js/multiselect.js"></script>
 
-@if (User.IsInRole("Admin"))
+@if (User.IsAdmin())
 {
     <script>
         document.querySelectorAll('.photo-delete').forEach(btn => {
@@ -59,12 +62,59 @@
                 if (!confirm('Delete this photo? This cannot be undone.')) return;
                 const id = btn.dataset.photoId;
                 const response = await fetch(`/api/photos/${id}`, { method: 'DELETE' });
-                if (response.ok) {
+                // Check the exact success status, NOT response.ok. A role-denied request is
+                // answered with a 302 to /Account/AccessDenied, which fetch follows to a 200 HTML
+                // page — response.ok would be true and the tile would vanish while the photo
+                // survived, telling the user a deletion happened that didn't.
+                if (response.status === 204) {
                     document.querySelector(`.photo-tile[data-photo-id="${id}"]`).remove();
                 } else {
                     alert('Delete failed.');
                 }
             });
+        });
+    </script>
+
+    @* Control and script both inside this single admin gate, matching the per-photo delete above:
+       a non-admin receives no delete markup and no delete JavaScript at all. *@
+    <div class="danger-zone mt-5">
+        <h4 class="text-danger">Delete this vehicle</h4>
+        <p class="text-muted small mb-2">
+            Permanently removes this vehicle, all @Model.Vehicle.Photos.Count photo records, and
+            every stored image file. This cannot be undone.
+        </p>
+        <label class="form-label small" for="delete-confirm">
+            Type <code>@(Model.Vehicle.Vin ?? Model.Vehicle.Reg)</code> to confirm
+        </label>
+        <input id="delete-confirm" class="form-control" style="max-width:340px" autocomplete="off" />
+        <button type="button" id="delete-vehicle" class="btn btn-danger mt-2"
+                data-vehicle-id="@Model.Vehicle.Id">Delete vehicle</button>
+        <div id="delete-error" class="text-danger small mt-2"></div>
+    </div>
+
+    <script>
+        document.getElementById('delete-vehicle').addEventListener('click', async (e) => {
+            const btn = e.currentTarget;
+            const confirmation = document.getElementById('delete-confirm').value;
+            if (!confirm('Delete this vehicle and all of its photos? This cannot be undone.')) return;
+
+            btn.disabled = true;
+            const response = await fetch(`/api/vehicles/${btn.dataset.vehicleId}`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ confirmation })
+            });
+
+            // Exact status, not response.ok — see the note on the photo delete above. The typed
+            // confirmation is re-checked server-side; this input is convenience, not the control.
+            if (response.status === 204) {
+                window.location.href = '/';
+                return;
+            }
+
+            btn.disabled = false;
+            document.getElementById('delete-error').textContent =
+                (await response.text()) || 'Delete failed.';
         });
     </script>
 }

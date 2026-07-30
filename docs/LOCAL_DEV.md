@@ -46,6 +46,32 @@ dotnet test MainProjectNumoPart.Tests
 Most tests need nothing beyond the .NET SDK. `BlobPhotoStorageTests` needs Azurite running —
 they'll fail with a connection error (not a false pass) if it isn't.
 
+## Roles
+
+Every account has exactly one role. All three are created automatically at startup.
+
+| Role | Can do |
+|---|---|
+| `Viewer` | Search, browse vehicles and photos, download zips |
+| `Staff` | Everything a Viewer can, plus upload photos |
+| `Admin` | Everything Staff can, plus delete photos, delete vehicles, and manage accounts |
+
+The account seeded from `InitialAdmin:Email` / `InitialAdmin:Password` is an `Admin`. Every other
+account is created by an admin at **`/Admin/Users`**, which is also where you change someone's role
+later. There is no self-service sign-up.
+
+Two guards you'll hit if you go looking for them: you cannot remove your own Admin role (ask
+another admin), and the last remaining Admin cannot be demoted — otherwise nobody could ever
+manage accounts again.
+
+**A role change takes effect within about a minute**, not instantly. Role claims live in the
+signed-in user's auth cookie; `SecurityStampValidator` re-checks it on the interval set in
+`Program.cs` (1 minute) and signs them out when it changes. If you're testing a demotion, wait a
+minute before concluding it didn't work.
+
+Accounts created before roles existed have no role at all. They show as **None** in the users
+table and can only browse — assign them a role there.
+
 ## Resetting local data
 
 Delete `app.db` (and `app.db-shm`/`app.db-wal` if present), then re-run
@@ -69,3 +95,38 @@ After any significant change, confirm end-to-end by hand:
 - [ ] As a non-admin account, confirm the × delete button is not visible, and a direct
       `DELETE /api/photos/{id}` request is rejected.
 - [ ] As admin, delete a photo — confirms it disappears from both the page and Azurite storage.
+
+### Upload context
+
+- [ ] From a vehicle page, click **+ Upload** — the banner names that vehicle and VIN/Reg are
+      prefilled.
+- [ ] Submit with no files selected — the error re-renders with the banner *still present* and the
+      fields *still prefilled*.
+- [ ] Use the nav-bar **Upload** link instead — blank form, no banner (this path is unchanged and
+      must stay that way: photographing a car that isn't in the system yet is the primary workflow).
+- [ ] Visit `/Upload?vehicleId=999999` — blank form, no banner, no error.
+
+### Roles
+
+- [ ] As a **Viewer**: no Upload or Users links in the nav; a search miss shows no upload link;
+      `/Upload` and `/Admin/Users` both land on the friendly **Access denied** page (not a 404);
+      `/Photos`, filtering and zip download all still work.
+- [ ] View source on a vehicle page as a Viewer — confirm *no* delete markup or delete JavaScript
+      is emitted at all, not merely hidden.
+- [ ] As **Staff**: upload works; no × buttons; no danger zone; `/Admin/Users` denied.
+- [ ] Create one account of each role — the form redirects (F5 doesn't resubmit) and the temporary
+      password renders as dots, not plain text.
+- [ ] Demote a signed-in Staff user to Viewer in another browser — within ~1 minute they lose
+      Upload.
+- [ ] Try to demote yourself, and try to demote the only Admin — both are refused with an
+      explanatory message.
+
+### Vehicle deletion
+
+- [ ] Wrong confirmation text → inline error, and every blob is still in Azurite.
+- [ ] Empty confirmation → same refusal.
+- [ ] Lowercase and/or spaced identifier (`ab12 cde` for `AB12CDE`) → **accepted**.
+- [ ] Correct text → lands on Home, gone from "Recently added", the details page 404s, and the
+      vehicle's blobs are gone from **both** the originals and thumbnails containers.
+- [ ] Another vehicle's photos and blobs are untouched.
+- [ ] As Staff, `curl -X DELETE /api/vehicles/{id}` with a *correct* confirmation → still refused.

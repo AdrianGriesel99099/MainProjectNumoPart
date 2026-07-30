@@ -1,0 +1,27 @@
+@* Pages/Account/AccessDenied.cshtml *@
+@page
+@model MainProjectNumoPart.Pages.Account.AccessDeniedModel
+@{
+    ViewData["Title"] = "Access denied";
+}
+
+@* Uses the default layout (unlike Login.cshtml, which sets Layout = null) so there's a nav bar
+   to escape by rather than a dead end. The ?ReturnUrl= value the framework appends is
+   deliberately not rendered — echoing a caller-supplied path back into the page buys nothing. *@
+<div class="col-md-6">
+    <h2>Access denied</h2>
+    <p>Your account doesn't have permission to open that page.</p>
+
+    @if (User.Identity?.IsAuthenticated == true)
+    {
+        <p class="text-muted">
+            You're signed in as <strong>@User.Identity.Name</strong>.
+        </p>
+    }
+
+    <p>
+        If you need to upload photos or manage accounts, ask an admin to change your role.
+    </p>
+
+    <a class="btn btn-primary" asp-page="/Index">Back to search</a>
+</div>

@@ -120,3 +120,4 @@ body {
     border-radius: 8px;
 }
 .flex-spacer { flex: 1; }
+.danger-zone { border: 1px solid #dc3545; border-radius: 8px; padding: 1rem; max-width: 560px; }

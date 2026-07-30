@@ -12,7 +12,28 @@
     <div class="alert alert-danger">@Model.ErrorMessage</div>
 }
 
+@if (Model.ContextVehicle is not null)
+{
+    <div class="alert alert-info col-md-6 d-flex justify-content-between align-items-start">
+        <div>
+            <div>Uploading to <strong>@(Model.ContextVehicle.MakeModel ?? "vehicle")</strong> @Model.ContextVehicle.Reg</div>
+            <div class="job-vin">@Model.ContextVehicle.Vin</div>
+            <div class="small text-muted mt-1">
+                VIN and registration are prefilled below and stay editable — changing them files
+                these photos under a different vehicle.
+            </div>
+        </div>
+        <a class="btn btn-sm btn-outline-secondary"
+           asp-page="/Vehicles/Details" asp-route-id="@Model.ContextVehicle.Id">Open vehicle</a>
+    </div>
+}
+
 <form method="post" enctype="multipart/form-data" class="col-md-6">
+    @* Rendered only when it has a value, so the no-context path doesn't post an empty VehicleId. *@
+    @if (Model.VehicleId.HasValue)
+    {
+        <input asp-for="VehicleId" type="hidden" />
+    }
     <div class="mb-3">
         <label class="form-label">Stage</label>
         <select asp-for="Stage" class="form-select"
