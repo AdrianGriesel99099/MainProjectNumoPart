@@ -20,6 +20,20 @@
     </div>
 </div>
 
+@if (Model.Vehicle.Photos.Count > 0)
+{
+    <details class="coverage-panel mb-3" open>
+        <summary>
+            Photo coverage
+            <span class="text-muted small">
+                — @Model.PhotoCountsByPart.Count of @(Enum.GetValues<MainProjectNumoPart.Models.Part>().Length) parts covered@(Model.UntaggedCount > 0 ? $", {Model.UntaggedCount} photo(s) untagged" : "")
+            </span>
+        </summary>
+        <partial name="_CarDiagram" model="@(new MainProjectNumoPart.Pages.Shared.CarDiagramModel { Mode = "coverage", ElementId = "coverage-diagram", PhotoCounts = Model.PhotoCountsByPart })" />
+        <div id="coverage-filter-note" class="small mt-2"></div>
+    </details>
+}
+
 @foreach (var stage in Enum.GetValues<Stage>())
 {
     var photos = Model.PhotosByStage[stage].ToList();
@@ -75,6 +89,53 @@
 </div>
 
 <script src="~/js/multiselect.js"></script>
+
+@if (Model.Vehicle.Photos.Count > 0)
+{
+    <script src="~/js/cardiagram.js"></script>
+    <script>
+        (function () {
+            const diagram = document.getElementById('coverage-diagram');
+            if (!diagram || !diagram.applyCoverage) return;
+
+            const counts = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(
+                Model.PhotoCountsByPart.ToDictionary(k => k.Key.ToString(), v => v.Value)));
+            diagram.applyCoverage(Object.keys(counts));
+
+            const note = document.getElementById('coverage-filter-note');
+            let active = null;
+
+            // Filtering is client-side: the photos are already on the page, so a round-trip
+            // would only make it slower and lose the selection.
+            diagram.addEventListener('carpartfiltered', (e) => {
+                const part = e.detail.part;
+                active = (active === part) ? null : part;
+                diagram.setSelected(active);
+
+                document.querySelectorAll('.photo-tile').forEach(t => {
+                    t.classList.toggle('part-hidden', active !== null && t.dataset.part !== active);
+                });
+
+                if (active === null) {
+                    note.textContent = '';
+                } else {
+                    const n = counts[active] || 0;
+                    note.innerHTML = n === 0
+                        ? '<span class="text-danger">No photos of that part yet.</span> <a href="#" id="coverage-clear">Show all</a>'
+                        : `Showing ${n} photo(s) of that part. <a href="#" id="coverage-clear">Show all</a>`;
+                }
+
+                document.getElementById('coverage-clear')?.addEventListener('click', (ev) => {
+                    ev.preventDefault();
+                    active = null;
+                    diagram.clearSelection();
+                    document.querySelectorAll('.photo-tile').forEach(t => t.classList.remove('part-hidden'));
+                    note.textContent = '';
+                });
+            });
+        })();
+    </script>
+}
 
 @if (User.CanUpload())
 {

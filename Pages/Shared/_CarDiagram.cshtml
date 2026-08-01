@@ -1,0 +1,180 @@
+@* Pages/Shared/_CarDiagram.cshtml
+
+   Five views of a car, one shown at a time, navigated by arrows on the panel itself.
+   Used two ways:
+     - coverage : shades parts that already have photos, click filters the page to that part
+     - picker   : selects a part (also the fallback when WebGL is unavailable)
+
+   Proportions come from a real sedan (4.7m x 1.8m x 1.45m), not guesswork: side 3.2:1,
+   front/rear 1.25:1, top 2.6:1, wheels ~43% of body height. A stretched side view is the
+   most obvious "this isn't a car" tell.
+
+   Every clickable region carries data-part matching a Part enum member name. A part drawn in
+   several views (the roof appears in four) shares that name, so selecting it lights up in all
+   of them — and a mistyped name simply fails to light up with its siblings.
+*@
+@model MainProjectNumoPart.Pages.Shared.CarDiagramModel
+@using MainProjectNumoPart.Models
+
+<div class="car-diagram" data-mode="@Model.Mode" id="@Model.ElementId">
+    <div class="car-diagram-head">
+        <span class="car-view-name">Left side</span>
+        <span class="flex-spacer"></span>
+        @if (Model.Mode == "coverage")
+        {
+            <span class="car-legend">
+                <span class="car-legend-swatch has"></span> has photos
+                <span class="car-legend-swatch none"></span> nothing yet
+            </span>
+        }
+    </div>
+
+    <div class="car-stage">
+        <button type="button" class="car-nav car-nav-left" data-nav="left" aria-label="Rotate left">&#8249;</button>
+        <button type="button" class="car-nav car-nav-right" data-nav="right" aria-label="Rotate right">&#8250;</button>
+        <button type="button" class="car-nav car-nav-up" data-nav="up" aria-label="Top view">&#8593;</button>
+        <button type="button" class="car-nav car-nav-down" data-nav="down" aria-label="Back to side view">&#8595;</button>
+
+        @* ---------- LEFT SIDE ---------- *@
+        <svg class="car-view" data-view="left" viewBox="0 0 440 175" role="img" aria-label="Left side of the car">
+            <path class="car-body" d="M20,128 C20,112 28,103 44,99 L126,89 C150,84 170,80 188,76 L216,46 C224,38 234,35 246,35 L282,35 C296,35 306,40 313,50 L344,74 L396,80 C413,83 420,93 421,105 L422,128 C422,135 418,138 410,138 L29,138 C22,138 20,135 20,128 Z" />
+            <circle class="car-arch" cx="103" cy="141" r="33" />
+            <circle class="car-arch" cx="330" cy="141" r="33" />
+            <path class="cp" data-part="FrontBumper" d="M20,128 C20,112 28,103 44,99 L52,98 L54,138 L29,138 C22,138 20,135 20,128 Z" />
+            <path class="cp" data-part="HeadlightLeft" d="M26,100 L50,97 L52,110 L27,112 Z" />
+            <path class="cp" data-part="Bonnet" d="M54,96 L126,89 C150,84 170,80 188,76 L190,90 L56,110 Z" />
+            <path class="cp" data-part="WingFrontLeft" d="M56,110 L190,92 L190,138 L54,138 Z" />
+            <path class="cp" data-part="Windscreen" d="M194,74 L216,50 L232,48 L232,72 Z" />
+            <path class="cp" data-part="Roof" d="M234,46 L284,44 C296,44 304,46 309,52 L310,58 L234,60 Z" />
+            <path class="cp" data-part="RearWindscreen" d="M312,54 L344,76 L322,76 L312,64 Z" />
+            <path class="cp" data-part="DoorFrontLeft" d="M192,76 L234,76 L234,138 L192,138 Z" />
+            <path class="cp" data-part="DoorRearLeft" d="M236,76 L275,76 L275,138 L236,138 Z" />
+            <path class="cp" data-part="QuarterRearLeft" d="M277,76 L344,78 L396,82 L396,138 L277,138 Z" />
+            <path class="cp" data-part="BootTailgate" d="M346,78 L396,80 C410,83 417,89 419,97 L346,92 Z" />
+            <path class="cp" data-part="RearBumper" d="M419,97 C421,101 421,105 422,128 C422,135 418,138 410,138 L398,138 L398,98 Z" />
+            <path class="cp" data-part="TaillightLeft" d="M398,84 L418,87 L419,99 L398,97 Z" />
+            <rect class="cp" data-part="SillLeft" x="150" y="138" width="180" height="7" rx="3" />
+            <g class="car-detail">
+                <path d="M234,48 L234,138 M275,48 L275,138 M190,76 L190,138 M44,101 L188,79 M318,72 L396,81" />
+                <path class="car-glass" d="M238,48 L272,48 L272,72 L238,72 Z M278,48 L300,50 L316,70 L278,72 Z" />
+                <rect x="243" y="82" width="18" height="4" rx="2" class="car-handle" />
+                <rect x="284" y="82" width="18" height="4" rx="2" class="car-handle" />
+            </g>
+            <circle class="car-tyre" cx="103" cy="141" r="26" />
+            <circle class="car-rim" cx="103" cy="141" r="12.5" />
+            <circle class="car-tyre" cx="330" cy="141" r="26" />
+            <circle class="car-rim" cx="330" cy="141" r="12.5" />
+            <g class="car-detail"><path d="M103,129 L103,153 M93,135 L113,147 M93,147 L113,135 M330,129 L330,153 M320,135 L340,147 M320,147 L340,135" /></g>
+            <circle class="cp" data-part="WheelFrontLeft" cx="103" cy="141" r="26" />
+            <circle class="cp" data-part="WheelRearLeft" cx="330" cy="141" r="26" />
+            <path class="cp" data-part="MirrorLeft" d="M186,72 l18,-5 l4,12 l-18,4 Z" />
+        </svg>
+
+        @* ---------- RIGHT SIDE (mirrored) ---------- *@
+        <svg class="car-view" data-view="right" viewBox="0 0 440 175" role="img" aria-label="Right side of the car">
+            <g transform="translate(440,0) scale(-1,1)">
+                <path class="car-body" d="M20,128 C20,112 28,103 44,99 L126,89 C150,84 170,80 188,76 L216,46 C224,38 234,35 246,35 L282,35 C296,35 306,40 313,50 L344,74 L396,80 C413,83 420,93 421,105 L422,128 C422,135 418,138 410,138 L29,138 C22,138 20,135 20,128 Z" />
+                <circle class="car-arch" cx="103" cy="141" r="33" />
+                <circle class="car-arch" cx="330" cy="141" r="33" />
+                <path class="cp" data-part="FrontBumper" d="M20,128 C20,112 28,103 44,99 L52,98 L54,138 L29,138 C22,138 20,135 20,128 Z" />
+                <path class="cp" data-part="HeadlightRight" d="M26,100 L50,97 L52,110 L27,112 Z" />
+                <path class="cp" data-part="Bonnet" d="M54,96 L126,89 C150,84 170,80 188,76 L190,90 L56,110 Z" />
+                <path class="cp" data-part="WingFrontRight" d="M56,110 L190,92 L190,138 L54,138 Z" />
+                <path class="cp" data-part="Windscreen" d="M194,74 L216,50 L232,48 L232,72 Z" />
+                <path class="cp" data-part="Roof" d="M234,46 L284,44 C296,44 304,46 309,52 L310,58 L234,60 Z" />
+                <path class="cp" data-part="RearWindscreen" d="M312,54 L344,76 L322,76 L312,64 Z" />
+                <path class="cp" data-part="DoorFrontRight" d="M192,76 L234,76 L234,138 L192,138 Z" />
+                <path class="cp" data-part="DoorRearRight" d="M236,76 L275,76 L275,138 L236,138 Z" />
+                <path class="cp" data-part="QuarterRearRight" d="M277,76 L344,78 L396,82 L396,138 L277,138 Z" />
+                <path class="cp" data-part="BootTailgate" d="M346,78 L396,80 C410,83 417,89 419,97 L346,92 Z" />
+                <path class="cp" data-part="RearBumper" d="M419,97 C421,101 421,105 422,128 C422,135 418,138 410,138 L398,138 L398,98 Z" />
+                <path class="cp" data-part="TaillightRight" d="M398,84 L418,87 L419,99 L398,97 Z" />
+                <rect class="cp" data-part="SillRight" x="150" y="138" width="180" height="7" rx="3" />
+                <g class="car-detail">
+                    <path d="M234,48 L234,138 M275,48 L275,138 M190,76 L190,138 M44,101 L188,79 M318,72 L396,81" />
+                    <path class="car-glass" d="M238,48 L272,48 L272,72 L238,72 Z M278,48 L300,50 L316,70 L278,72 Z" />
+                    <rect x="243" y="82" width="18" height="4" rx="2" class="car-handle" />
+                    <rect x="284" y="82" width="18" height="4" rx="2" class="car-handle" />
+                </g>
+                <circle class="car-tyre" cx="103" cy="141" r="26" />
+                <circle class="car-rim" cx="103" cy="141" r="12.5" />
+                <circle class="car-tyre" cx="330" cy="141" r="26" />
+                <circle class="car-rim" cx="330" cy="141" r="12.5" />
+                <g class="car-detail"><path d="M103,129 L103,153 M93,135 L113,147 M93,147 L113,135 M330,129 L330,153 M320,135 L340,147 M320,147 L340,135" /></g>
+                <circle class="cp" data-part="WheelFrontRight" cx="103" cy="141" r="26" />
+                <circle class="cp" data-part="WheelRearRight" cx="330" cy="141" r="26" />
+                <path class="cp" data-part="MirrorRight" d="M186,72 l18,-5 l4,12 l-18,4 Z" />
+            </g>
+        </svg>
+
+        @* ---------- FRONT ---------- *@
+        <svg class="car-view" data-view="front" viewBox="0 0 250 215" role="img" aria-label="Front of the car">
+            <path class="car-body" d="M32,176 L32,104 C32,86 41,73 58,66 L76,38 C83,26 95,20 112,20 L138,20 C155,20 167,26 174,38 L192,66 C209,73 218,86 218,104 L218,176 C218,182 214,185 208,185 L42,185 C36,185 32,182 32,176 Z" />
+            <path class="cp" data-part="Windscreen" d="M78,64 L86,40 C89,32 97,28 108,28 L142,28 C153,28 161,32 164,40 L172,64 Z" />
+            <path class="cp" data-part="Roof" d="M104,28 L146,28 L146,17 L104,17 Z" />
+            <path class="cp" data-part="Bonnet" d="M44,72 L206,72 L208,106 L42,106 Z" />
+            <path class="cp" data-part="HeadlightLeft" d="M36,112 L84,110 L84,130 L38,130 Z" />
+            <path class="cp" data-part="HeadlightRight" d="M214,112 L166,110 L166,130 L212,130 Z" />
+            <rect class="cp" data-part="FrontBumper" x="34" y="140" width="182" height="36" rx="10" />
+            <path class="cp" data-part="MirrorLeft" d="M20,76 l16,-6 l4,13 l-16,5 Z" />
+            <path class="cp" data-part="MirrorRight" d="M230,76 l-16,-6 l-4,13 l16,5 Z" />
+            <rect class="cp" data-part="WheelFrontLeft" x="24" y="178" width="16" height="22" rx="5" />
+            <rect class="cp" data-part="WheelFrontRight" x="210" y="178" width="16" height="22" rx="5" />
+            <g class="car-detail"><rect x="92" y="146" width="66" height="18" rx="4" fill="none" /></g>
+        </svg>
+
+        @* ---------- REAR ---------- *@
+        <svg class="car-view" data-view="rear" viewBox="0 0 250 215" role="img" aria-label="Rear of the car">
+            <path class="car-body" d="M32,176 L32,104 C32,86 41,73 58,66 L74,38 C81,26 93,20 110,20 L140,20 C157,20 169,26 176,38 L192,66 C209,73 218,86 218,104 L218,176 C218,182 214,185 208,185 L42,185 C36,185 32,182 32,176 Z" />
+            <path class="cp" data-part="RearWindscreen" d="M76,64 L84,40 C87,32 95,28 106,28 L144,28 C155,28 163,32 166,40 L174,64 Z" />
+            <path class="cp" data-part="Roof" d="M104,28 L146,28 L146,17 L104,17 Z" />
+            <path class="cp" data-part="BootTailgate" d="M42,72 L208,72 L208,108 L42,108 Z" />
+            <path class="cp" data-part="TaillightLeft" d="M36,114 L80,112 L80,134 L38,134 Z" />
+            <path class="cp" data-part="TaillightRight" d="M214,114 L170,112 L170,134 L212,134 Z" />
+            <rect class="cp" data-part="RearBumper" x="34" y="142" width="182" height="34" rx="10" />
+            <rect class="cp" data-part="WheelRearLeft" x="24" y="178" width="16" height="22" rx="5" />
+            <rect class="cp" data-part="WheelRearRight" x="210" y="178" width="16" height="22" rx="5" />
+            <path class="cp" data-part="Undercarriage" d="M78,180 l94,0 l0,14 l-94,0 Z" />
+            <g class="car-detail"><rect x="104" y="86" width="42" height="12" rx="3" fill="none" /></g>
+        </svg>
+
+        @* ---------- TOP ---------- *@
+        <svg class="car-view car-view-top" data-view="top" viewBox="0 0 180 440" role="img" aria-label="Top of the car">
+            <path class="car-body" d="M90,12 C116,12 134,22 140,44 L150,100 C156,142 158,196 158,254 C158,312 156,362 150,396 C145,420 128,428 90,428 C52,428 35,420 30,396 C24,362 22,312 22,254 C22,196 24,142 30,100 L40,44 C46,22 64,12 90,12 Z" />
+            <path class="cp" data-part="FrontBumper" d="M90,12 C116,12 134,22 140,44 L126,49 C120,30 108,24 90,24 C72,24 60,30 54,49 L40,44 C46,22 64,12 90,12 Z" />
+            <path class="cp" data-part="HeadlightLeft" d="M40,30 L60,26 L63,38 L44,42 Z" />
+            <path class="cp" data-part="HeadlightRight" d="M140,30 L120,26 L117,38 L136,42 Z" />
+            <path class="cp" data-part="Bonnet" d="M55,52 L125,52 L136,72 L141,100 L39,100 L44,72 Z" />
+            <path class="cp" data-part="WingFrontLeft" d="M30,100 L40,44 L44,72 L39,100 Z" />
+            <path class="cp" data-part="WingFrontRight" d="M150,100 L140,44 L136,72 L141,100 Z" />
+            <path class="cp" data-part="Windscreen" d="M39,104 L141,104 L146,140 L34,140 Z" />
+            <path class="cp" data-part="Roof" d="M34,144 L146,144 L148,262 L32,262 Z" />
+            <path class="cp" data-part="RearWindscreen" d="M32,266 L148,266 L144,302 L36,302 Z" />
+            <path class="cp" data-part="BootTailgate" d="M38,306 L142,306 L138,382 L42,382 Z" />
+            <path class="cp" data-part="RearBumper" d="M90,428 C52,428 35,420 30,396 L44,391 C50,412 66,416 90,416 C114,416 130,412 136,391 L150,396 C145,420 128,428 90,428 Z" />
+            <path class="cp" data-part="TaillightLeft" d="M40,394 L60,398 L57,410 L38,406 Z" />
+            <path class="cp" data-part="TaillightRight" d="M140,394 L120,398 L123,410 L142,406 Z" />
+            <path class="cp" data-part="DoorFrontLeft" d="M32,146 L21,148 L20,202 L31,202 Z" />
+            <path class="cp" data-part="DoorFrontRight" d="M148,146 L159,148 L160,202 L149,202 Z" />
+            <path class="cp" data-part="DoorRearLeft" d="M31,206 L20,206 L21,262 L32,262 Z" />
+            <path class="cp" data-part="DoorRearRight" d="M149,206 L160,206 L159,262 L148,262 Z" />
+            <path class="cp" data-part="QuarterRearLeft" d="M32,266 L21,266 L26,338 L37,336 Z" />
+            <path class="cp" data-part="QuarterRearRight" d="M148,266 L159,266 L154,338 L143,336 Z" />
+            <rect class="cp" data-part="WheelFrontLeft" x="10" y="86" width="15" height="40" rx="6" />
+            <rect class="cp" data-part="WheelFrontRight" x="155" y="86" width="15" height="40" rx="6" />
+            <rect class="cp" data-part="WheelRearLeft" x="10" y="314" width="15" height="40" rx="6" />
+            <rect class="cp" data-part="WheelRearRight" x="155" y="314" width="15" height="40" rx="6" />
+            <path class="cp" data-part="MirrorLeft" d="M30,138 l-15,-6 l-4,10 l15,6 Z" />
+            <path class="cp" data-part="MirrorRight" d="M150,138 l15,-6 l4,10 l-15,6 Z" />
+        </svg>
+    </div>
+
+    @* These six have no honest position on a drawing of the car's outside, so they are plain
+       buttons rather than invented hotspots that would be harder to find. *@
+    <div class="car-extras">
+        @foreach (var part in new[] { Part.Interior, Part.EngineBay, Part.LoadArea, Part.Odometer, Part.Undercarriage, Part.Other })
+        {
+            <button type="button" class="btn btn-sm btn-outline-secondary cp-btn" data-part="@part">@Html.DisplayFor(_ => part)</button>
+        }
+    </div>
+</div>
