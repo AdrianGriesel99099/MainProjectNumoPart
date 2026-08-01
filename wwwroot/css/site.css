@@ -171,3 +171,10 @@ body {
    having to match each one's own shade — an immediate visual response on click, independent of
    the (much longer) spinner that follows once the upload is actually underway. */
 .btn-clicked { filter: brightness(0.82); pointer-events: none; }
+
+#damage-mark-tabs button.active { background: #185FA5; color: #fff; border-color: #185FA5; }
+.damage-mark-canvas-wrap { position: relative; max-width: 520px; min-height: 120px; background: #f4f3ee; border: 1px solid #e3e1d9; border-radius: 8px; overflow: hidden; cursor: crosshair; display: flex; align-items: center; justify-content: center; }
+.damage-mark-canvas-wrap img, .damage-mark-canvas-wrap svg { display: block; width: 100%; height: auto; }
+.damage-mark-canvas-wrap .damage-mark-empty { padding: 2rem; color: #888; font-size: 0.85rem; cursor: default; text-align: center; }
+.damage-mark-dot { position: absolute; width: 18px; height: 18px; margin-left: -9px; margin-top: -9px; border-radius: 50%; background: rgba(220,53,69,0.85); border: 2px solid #fff; cursor: pointer; }
+.damage-mark-dot.pending { background: rgba(24,95,165,0.9); }

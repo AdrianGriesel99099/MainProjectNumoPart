@@ -151,6 +151,64 @@
     }
 </details>
 
+@* One modal, reused for every part — damagemarks.js populates it on 'carpartmarked'.
+   Bootstrap's own modal component, not a hand-rolled one: bootstrap.bundle.min.js is already
+   vendored and loaded on every page, and no modal pattern exists anywhere else in this app to
+   be consistent with, so reusing battle-tested show/hide, backdrop and focus-trap behaviour
+   beats inventing a new one. *@
+<div class="modal fade" id="damage-mark-modal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="damage-mark-title">Mark damage</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="btn-group btn-group-sm mb-2" id="damage-mark-tabs">
+                    <button type="button" class="btn btn-outline-secondary" data-tab="diagram">Diagram</button>
+                    <button type="button" class="btn btn-outline-secondary" data-tab="photo">Photo</button>
+                </div>
+                <select id="damage-mark-photo-select" class="form-select form-select-sm mb-2 d-none"></select>
+                <div id="damage-mark-canvas-wrap" class="damage-mark-canvas-wrap"></div>
+                <form id="damage-mark-note-form" class="d-none mt-2">
+                    <textarea id="damage-mark-note" class="form-control" rows="2" placeholder="What's the damage?" maxlength="2000"></textarea>
+                    <div class="mt-2">
+                        <button type="submit" class="btn btn-sm btn-primary">Save mark</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="damage-mark-cancel">Cancel</button>
+                    </div>
+                    <div id="damage-mark-error" class="text-danger small mt-1"></div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+@* bootstrap.bundle.min.js loads at the very bottom of _Layout.cshtml's <body>, AFTER
+   @RenderBody() — i.e. after this entire page's own inline scripts. damagemarks.js calls `new
+   bootstrap.Modal(...)` at load time, so it must run AFTER bootstrap, not inline here. Wrapping
+   it (and the data it reads) in @section Scripts renders it where _Layout's own
+   @await RenderSectionAsync("Scripts", ...) is placed — after bootstrap — which is the only
+   script on this page with that dependency; every other one here is self-contained. *@
+@section Scripts {
+    <script>
+        // Preloaded once rather than fetched per part-click: at this app's scale (a workshop's
+        // worth of photos and marks per vehicle) this is a handful of KB, and it means opening the
+        // popup for a different part is instant client-side filtering, not another round-trip.
+        window.__damageMarksData = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.DamageMarksNewestFirst.Select(m => new {
+            id = m.Id, part = m.Part.ToString(), photoId = m.PhotoId,
+            xPercent = m.XPercent, yPercent = m.YPercent, note = m.Note, authorEmail = m.AuthorEmail
+        })));
+        window.__vehiclePhotosData = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Vehicle.Photos
+            .Where(p => p.Part.HasValue)
+            .OrderByDescending(p => p.UploadedAtUtc)
+            .Select(p => new { id = p.Id, part = p.Part!.Value.ToString(), label = p.Stage + " #" + p.SequenceNumber.ToString("000") })));
+        window.__vehicleId = @Model.Vehicle.Id;
+        window.__isAdmin = @Json.Serialize(User.IsAdmin());
+        window.__canMarkDamage = @Json.Serialize(User.CanUpload());
+    </script>
+    <script src="~/js/damagemarks.js"></script>
+}
+
 @if (Model.Vehicle.Photos.Count > 0)
 {
     <details class="coverage-panel mb-3" open>

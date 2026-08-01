@@ -180,12 +180,12 @@ blender --background --python tools/car-model/build_car.py
 
 This reads `tools/car-model/source/car_mesh.glb` (a real sedan mesh, not authored by this repo —
 see the licensing note at the top of `build_car.py` before redistributing it further than
-internal use), recolours it, and generates 33 invisible hitboxes — one per `Part` enum member —
-positioned as fractions of the mesh's own bounding box. `CarModelManifestTests` will fail the
-build if the two ever drift (an enum member renamed without regenerating the model, or vice
-versa). If no source mesh is available, `tools/car-model/build_car_primitive.py` builds a car
-from primitives instead and is a straight drop-in replacement — same output paths, same manifest
-format.
+internal use), recolours it, and generates 49 hitboxes — one per `Part` enum member, most visible
+and clickable, six hidden (`hide_render=True`) for parts with no exterior shape — positioned as
+fractions of the mesh's own bounding box. `CarModelManifestTests` will fail the build if the two
+ever drift (an enum member renamed without regenerating the model, or vice versa). If no source
+mesh is available, `tools/car-model/build_car_primitive.py` builds a car from primitives instead
+and is a straight drop-in replacement — same output paths, same manifest format.
 
 ### Deleting a user
 
@@ -229,3 +229,61 @@ Two independent free-text logs: a job card per vehicle (`VehicleUpdate`), and co
       spinner with "Uploading…" before the page navigates away.
 - [ ] Click it a second time while it's still processing — nothing happens (the button is
       disabled, so the batch can't be submitted twice).
+
+### The 16 panel-beater parts
+
+Front-end terminology added on top of the original 33: front/rear spoiler, main/centre grill,
+left/right spotlamp and spotlamp grill, left/right front bumper grill (all with real diagram/3D
+regions), plus left/right front fenderliner and left/right front/rear bumper slide (button-only —
+none of the six are visible from outside the car, so they live alongside Interior/Engine bay
+rather than getting an invented hotspot).
+
+- [ ] On the front view of the 2D diagram, each of the ten new regions is individually clickable
+      without accidentally selecting a neighbour — Spotlamp nests inside Spotlamp grill inside
+      Bumper grill, and Centre grill inside Main grill, so click near the centre of the smallest
+      shape first.
+- [ ] The six button-only parts appear in the extras row and in the plain `<select>` fallback; a
+      photo can be tagged to any of the 16 like any other part.
+- [ ] In the 3D picker, rotating past the nested front-corner parts (Spotlamp inside its grill
+      inside the bumper grill) — the innermost one is reachable by click, not permanently occluded
+      by its parent's larger hitbox. (This nesting is exactly why 3D hitbox overlap resolves by
+      camera distance, not click order — if the innermost part were ever unreachable after a
+      future `build_car.py` change, this is the symptom to watch for.)
+
+### 3D panel lines
+
+Every hitbox in the 3D model now renders a thin, low-opacity outline (`THREE.EdgesGeometry` +
+`LineSegments`, added client-side in `car3d.js` — no Blender regeneration needed for this part).
+Hitboxes are deliberately oversized past the visible body hull and have no shared-edge data, so
+these are an approximation, not literal panel-gap geometry.
+
+- [ ] Open the 3D picker and rotate the car — every visible panel has a faint separating line from
+      its neighbours, not just the currently-selected one, and it's genuinely legible rather than
+      a noisy tangle of disconnected boxes.
+
+### Damage marking
+
+Clicking a part on the always-rendered **Mark damage** diagram (works even before any photo
+exists) opens a popup: the vehicle's real tagged photo if one exists for that part, otherwise a
+zoomed diagram shape (via `getBBox()` on a clone of the part's own SVG region — no new artwork).
+Either way, clicking anywhere that isn't an existing pin starts a new one; existing pins render as
+small dots with a tooltip, never burned into the image itself. A second, permanent "Damage marks"
+list on the vehicle page is the browsable record — part, thumbnail-or-"(diagram)", note, author,
+timestamp.
+
+- [ ] Click a part with **no** tagged photo — popup opens on the diagram tab, zoomed to just that
+      shape.
+- [ ] Click inside it (not on an existing dot) — a pin drops where you clicked and a note field
+      appears; Save → the mark appears both in the popup and in the "Damage marks" list.
+- [ ] Tag a photo to that same part, reopen the popup for it — now defaults to the **photo** tab;
+      the earlier diagram-anchored mark is untouched (still listed, still diagram-anchored).
+- [ ] Delete the photo a mark was anchored to — that mark disappears too (cascade); any
+      diagram-anchored marks for the same part are unaffected.
+- [ ] As Staff, add a mark → succeeds; as Viewer, `POST /api/vehicles/{id}/damage-marks` → refused.
+      **Confirm Staff specifically succeeds**, not just that Viewer is refused — same
+      `RequireRole(Roles.Staff, Roles.Admin)` two-argument trap as the job card and photo comments.
+- [ ] Delete a mark as Admin → gone; as Staff → refused (delete is Admin-only, unlike add).
+- [ ] Click one of the six button-only parts (e.g. a fenderliner) with nothing tagged and no
+      diagram shape — popup still opens, shows "No photo or diagram shape for this part yet — you
+      can still record a note," and saving still works (fixed centre position rather than a real
+      pin, since there's nothing to click on).

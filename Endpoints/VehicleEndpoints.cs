@@ -1,4 +1,5 @@
 using MainProjectNumoPart.Authorization;
+using MainProjectNumoPart.Models;
 using MainProjectNumoPart.Services;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -12,6 +13,10 @@ namespace MainProjectNumoPart.Endpoints
         public record DeleteVehicleRequest(string? Confirmation);
 
         public record AddUpdateRequest(string? Body);
+
+        // PhotoId is nullable — null means the mark is anchored to the generic part diagram
+        // rather than a specific photo.
+        public record AddDamageMarkRequest(Part Part, int? PhotoId, double XPercent, double YPercent, string? Note);
 
         public static void MapVehicleEndpoints(this WebApplication app)
         {
@@ -69,6 +74,42 @@ namespace MainProjectNumoPart.Endpoints
                 CancellationToken ct) =>
             {
                 var result = await updates.DeleteAsync(updateId, ct);
+                return result.Status == NoteStatus.Success ? Results.NoContent() : Results.NotFound();
+            }).RequireAuthorization(policy => policy.RequireRole(Roles.Admin));
+
+            group.MapPost("/{id:int}/damage-marks", async (
+                int id,
+                AddDamageMarkRequest? body,
+                DamageMarkService marks,
+                UserManager<IdentityUser> userManager,
+                HttpContext http,
+                CancellationToken ct) =>
+            {
+                if (body is null) return Results.BadRequest("No mark data supplied.");
+
+                var userId = userManager.GetUserId(http.User)!;
+                var email = (await userManager.FindByIdAsync(userId))?.Email ?? userId;
+
+                var result = await marks.AddAsync(
+                    id, body.Part, body.PhotoId, body.XPercent, body.YPercent, body.Note, userId, email, ct);
+
+                return result.Status switch
+                {
+                    NoteStatus.Success => Results.Ok(),
+                    NoteStatus.NotFound => Results.NotFound(),
+                    _ => Results.BadRequest(result.Message)
+                };
+            })
+            // Two arguments, never the comma-joined Roles.StaffOrAdmin constant — see the
+            // tagging endpoint in PhotoEndpoints.cs for why that silently denies everyone.
+            .RequireAuthorization(policy => policy.RequireRole(Roles.Staff, Roles.Admin));
+
+            group.MapDelete("/damage-marks/{markId:int}", async (
+                int markId,
+                DamageMarkService marks,
+                CancellationToken ct) =>
+            {
+                var result = await marks.DeleteAsync(markId, ct);
                 return result.Status == NoteStatus.Success ? Results.NoContent() : Results.NotFound();
             }).RequireAuthorization(policy => policy.RequireRole(Roles.Admin));
         }
