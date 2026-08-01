@@ -6,6 +6,13 @@ namespace MainProjectNumoPart.Models
         public int VehicleId { get; set; }
         public Vehicle Vehicle { get; set; } = null!;
         public Stage Stage { get; set; }
+
+        // Which panel of the car this photo shows. Null = not tagged yet, which is the normal
+        // state right after a bulk upload — staff shoot a burst and sort them afterwards.
+        // Deliberately NOT part of the blob path: paths are {folder}/{Stage}/{file}, so putting
+        // Part in there would mean copying blobs every time someone corrected a tag.
+        public Part? Part { get; set; }
+
         public string FileName { get; set; } = null!;
         public string BlobPathOriginal { get; set; } = null!;
         public string BlobPathThumbnail { get; set; } = null!;

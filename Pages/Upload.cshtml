@@ -40,6 +40,13 @@
                 asp-items="Html.GetEnumSelectList<MainProjectNumoPart.Models.Stage>()"></select>
     </div>
     <div class="mb-3">
+        <label asp-for="Part" class="form-label">Part (optional — you can tag these later instead)</label>
+        <select asp-for="Part" class="form-select"
+                asp-items="Html.GetEnumSelectList<MainProjectNumoPart.Models.Part>()">
+            <option value="">— not set —</option>
+        </select>
+    </div>
+    <div class="mb-3">
         <label asp-for="Vin" class="form-label">VIN</label>
         <input asp-for="Vin" class="form-control" />
     </div>

@@ -36,6 +36,15 @@ builder.Services.AddScoped<PhotoSequenceAllocator>();
 builder.Services.AddScoped<UserAdminService>();
 builder.Services.AddScoped<VehicleDeletionService>();
 builder.Services.AddScoped<VehicleEditService>();
+builder.Services.AddScoped<PhotoTaggingService>();
+
+// Minimal-API JSON defaults to reading enums as NUMBERS, so a body of {"part":"FrontBumper"}
+// is rejected with a 400 while {"part":null} succeeds — a split failure that is easy to miss.
+// Accepting names keeps the wire format readable and matches what the UI naturally sends.
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
+});
 
 // BlobServiceClient is a singleton (thread-safe, expensive to construct); IPhotoStorage
 // wraps it and is registered per-scope to match the other services above.

@@ -1,6 +1,8 @@
 using MainProjectNumoPart.Authorization;
 using MainProjectNumoPart.Data;
+using MainProjectNumoPart.Models;
 using MainProjectNumoPart.Services;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using System.Linq;
 using System.IO.Compression;
@@ -10,6 +12,9 @@ namespace MainProjectNumoPart.Endpoints
     public static class PhotoEndpoints
     {
         private static readonly TimeSpan SasLifetime = TimeSpan.FromMinutes(15);
+
+        // Part is nullable so the same endpoint clears a tag as well as setting one.
+        public record SetPartRequest(int[]? Ids, Part? Part);
 
         public static void MapPhotoEndpoints(this WebApplication app)
         {
@@ -43,6 +48,27 @@ namespace MainProjectNumoPart.Endpoints
 
                 return Results.NoContent();
             }).RequireAuthorization(policy => policy.RequireRole(Roles.Admin));
+
+            group.MapPost("/part", async (
+                SetPartRequest? body,
+                PhotoTaggingService tagging,
+                UserManager<IdentityUser> userManager,
+                HttpContext http,
+                CancellationToken ct) =>
+            {
+                if (body is null) return Results.BadRequest("No photos selected.");
+
+                var result = await tagging.SetPartAsync(
+                    body.Ids ?? Array.Empty<int>(), body.Part, userManager.GetUserId(http.User)!, ct);
+
+                return result.Status == PhotoTagStatus.Updated
+                    ? Results.Ok(new { updated = result.Updated })
+                    : Results.BadRequest(result.Message);
+            })
+            // RequireRole takes params string[] — passing the comma-joined Roles.StaffOrAdmin
+            // constant here would look for one role literally named "Staff,Admin" and deny
+            // everyone. That constant is only valid inside [Authorize(Roles = ...)].
+            .RequireAuthorization(policy => policy.RequireRole(Roles.Staff, Roles.Admin));
 
             group.MapPost("/download", async (HttpRequest request, HttpResponse response, Data.AppDbContext db, Services.IPhotoStorage storage) =>
             {

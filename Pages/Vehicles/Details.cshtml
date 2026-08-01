@@ -33,10 +33,14 @@
         <div class="photo-strip">
             @foreach (var photo in photos)
             {
-                <div class="photo-tile" data-photo-id="@photo.Id">
+                <div class="photo-tile" data-photo-id="@photo.Id" data-part="@(photo.Part?.ToString() ?? "")">
                     <img src="/api/photos/@photo.Id/thumbnail" loading="lazy"
                          alt="@stage photo @photo.SequenceNumber.ToString("000") for @(Model.Vehicle.Reg ?? Model.Vehicle.Vin)" />
                     <span class="photo-seq">@photo.SequenceNumber.ToString("000")</span>
+                    @if (photo.Part is not null)
+                    {
+                        <span class="photo-part">@Html.DisplayFor(_ => photo.Part)</span>
+                    }
                     @if (User.IsAdmin())
                     {
                         <button type="button" class="photo-delete" data-photo-id="@photo.Id" title="Delete">×</button>
@@ -47,16 +51,57 @@
     }
 }
 
-<form id="selection-download-form" method="post" action="/api/photos/download"></form>
+@* data-selection-ids marks this as a form multiselect.js should populate with the selected
+   photo ids. It used to be found by its hard-coded id; the attribute is what allows a second
+   bulk action to share the same selection. *@
+<form id="selection-download-form" data-selection-ids method="post" action="/api/photos/download"></form>
 
 <div id="selection-bar" class="selection-bar d-none">
     <span id="selection-count"></span>
     <span class="flex-spacer"></span>
+    @if (User.CanUpload())
+    {
+        <select id="tag-part" class="form-select form-select-sm" style="width:auto" aria-label="Set part for selected photos">
+            <option value="">Set part…</option>
+            <option value="__clear__">— clear part —</option>
+            @foreach (var part in Enum.GetValues<MainProjectNumoPart.Models.Part>())
+            {
+                <option value="@part">@Html.DisplayFor(_ => part)</option>
+            }
+        </select>
+    }
     <button type="button" id="selection-clear" class="btn btn-sm btn-outline-light">Clear</button>
     <button type="submit" form="selection-download-form" class="btn btn-sm btn-primary">⬇ Download zip</button>
 </div>
 
 <script src="~/js/multiselect.js"></script>
+
+@if (User.CanUpload())
+{
+    <script>
+        document.getElementById('tag-part').addEventListener('change', async (e) => {
+            const raw = e.target.value;
+            if (!raw) return;
+            const ids = window.PhotoSelection.ids();
+            if (ids.length === 0) { e.target.value = ''; return; }
+
+            const response = await fetch('/api/photos/part', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids: ids, part: raw === '__clear__' ? null : raw })
+            });
+
+            // Exact status, not response.ok — a role-denied request answers 302 to
+            // /Account/AccessDenied, which fetch follows to a 200 and would look like success.
+            if (response.status === 200) {
+                window.location.reload();
+            } else {
+                alert(await response.text() || 'Could not set the part.');
+                e.target.value = '';
+            }
+        });
+    </script>
+}
 
 @if (User.IsAdmin())
 {

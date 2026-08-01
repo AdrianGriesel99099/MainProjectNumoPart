@@ -47,6 +47,11 @@ namespace MainProjectNumoPart.Pages
         [BindProperty] public string? Vin { get; set; }
         [BindProperty] public string? Reg { get; set; }
         [BindProperty] public Stage Stage { get; set; }
+
+        // Optional, and applies to the whole batch exactly like Stage does. Most uploads leave
+        // it unset — the realistic flow is shooting a burst and tagging afterwards — but when
+        // someone is deliberately photographing one panel it saves a second pass.
+        [BindProperty] public Part? Part { get; set; }
         [BindProperty] public DateTime? DateTaken { get; set; }
         [BindProperty] public List<IFormFile> Files { get; set; } = new();
 
@@ -202,6 +207,7 @@ namespace MainProjectNumoPart.Pages
                         {
                             VehicleId = vehicle.Id,
                             Stage = Stage,
+                            Part = Part,
                             FileName = originalFileName,
                             BlobPathOriginal = blobPathOriginal,
                             BlobPathThumbnail = blobPathThumbnail,
