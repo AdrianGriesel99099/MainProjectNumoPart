@@ -210,7 +210,23 @@
             const validNames = new Set(manifest.meshes);
             modelRoot = gltf.scene;
             modelRoot.traverse((obj) => {
-                if (obj.isMesh && validNames.has(obj.name)) partMeshes[obj.name] = obj;
+                if (obj.isMesh && validNames.has(obj.name)) {
+                    partMeshes[obj.name] = obj;
+
+                    // Hitboxes are invisible by design (opacity 0, only bumped up on selection —
+                    // see highlight() below), so with 49 of them now packed edge-to-edge and
+                    // overlapping, there is nothing showing where one part ends and the next
+                    // begins. A thin outline traced from each hitbox's own geometry and parented
+                    // to it (so it inherits the same transform automatically, no separate
+                    // bookkeeping) draws that boundary. Always visible, not just on hover or
+                    // selection — the point is seeing every division at a glance, the moment the
+                    // model loads.
+                    const edges = new THREE.LineSegments(
+                        new THREE.EdgesGeometry(obj.geometry),
+                        new THREE.LineBasicMaterial({ color: 0x8a8a86, transparent: true, opacity: 0.18 })
+                    );
+                    obj.add(edges);
+                }
             });
             scene.add(modelRoot);
 
