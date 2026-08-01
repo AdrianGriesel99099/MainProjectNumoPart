@@ -30,9 +30,14 @@ namespace MainProjectNumoPart.Pages.Vehicles
 
         public int UntaggedCount { get; set; }
 
+        public List<VehicleUpdate> UpdatesNewestFirst { get; set; } = new();
+
         public async Task<IActionResult> OnGetAsync(int id)
         {
-            var vehicle = await _db.Vehicles.Include(v => v.Photos).FirstOrDefaultAsync(v => v.Id == id);
+            var vehicle = await _db.Vehicles
+                .Include(v => v.Photos)
+                .Include(v => v.VehicleUpdates)
+                .FirstOrDefaultAsync(v => v.Id == id);
             if (vehicle is null) return NotFound();
 
             Vehicle = vehicle;
@@ -46,6 +51,10 @@ namespace MainProjectNumoPart.Pages.Vehicles
                 .ToDictionary(g => g.Key, g => g.Count());
 
             UntaggedCount = vehicle.Photos.Count(p => !p.Part.HasValue);
+
+            UpdatesNewestFirst = vehicle.VehicleUpdates
+                .OrderByDescending(u => u.CreatedAtUtc)
+                .ToList();
 
             return Page();
         }

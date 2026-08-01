@@ -12,6 +12,8 @@ namespace MainProjectNumoPart.Data
 
         public DbSet<Vehicle> Vehicles => Set<Vehicle>();
         public DbSet<Photo> Photos => Set<Photo>();
+        public DbSet<PhotoComment> PhotoComments => Set<PhotoComment>();
+        public DbSet<VehicleUpdate> VehicleUpdates => Set<VehicleUpdate>();
 
         protected override void OnModelCreating(ModelBuilder builder)
         {

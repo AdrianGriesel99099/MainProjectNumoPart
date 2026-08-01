@@ -93,5 +93,15 @@ namespace MainProjectNumoPart.Pages.Admin
             // buffer would re-fire on refresh, and the guard messages read the same either way.
             return RedirectToPage();
         }
+
+        public async Task<IActionResult> OnPostDeleteAsync(string userId)
+        {
+            var result = await _users.DeleteUserAsync(CurrentUserId, userId);
+
+            StatusMessage = result.Message;
+            StatusIsError = result.IsError;
+
+            return RedirectToPage();
+        }
     }
 }

@@ -175,6 +175,76 @@ namespace MainProjectNumoPart.Tests
             Assert.Equal(Roles.Staff, listed.Single(u => u.Email == "staff@workshop.local").Role);
         }
 
+        [Fact]
+        public async Task DeleteUserRemovesTheAccount()
+        {
+            var (service, users, scope) = await BuildAsync();
+            using var _ = scope;
+            var actor = await AddUserAsync(users, "actor@workshop.local", Roles.Admin);
+            var target = await AddUserAsync(users, "target@workshop.local", Roles.Viewer);
+
+            var result = await service.DeleteUserAsync(actor.Id, target.Id);
+
+            Assert.Equal(UserAdminStatus.Success, result.Status);
+            Assert.Null(await users.FindByIdAsync(target.Id));
+        }
+
+        [Fact]
+        public async Task CannotDeleteSelf()
+        {
+            var (service, users, scope) = await BuildAsync();
+            using var _ = scope;
+            var admin = await AddUserAsync(users, "admin@workshop.local", Roles.Admin);
+            await AddUserAsync(users, "other@workshop.local", Roles.Admin); // so the last-admin guard can't be what fires
+
+            var result = await service.DeleteUserAsync(admin.Id, admin.Id);
+
+            Assert.Equal(UserAdminStatus.CannotDeleteSelf, result.Status);
+            Assert.NotNull(await users.FindByIdAsync(admin.Id));
+        }
+
+        [Fact]
+        public async Task CannotDeleteLastAdmin()
+        {
+            var (service, users, scope) = await BuildAsync();
+            using var _ = scope;
+            var onlyAdmin = await AddUserAsync(users, "admin@workshop.local", Roles.Admin);
+            // Acting id is a different user, so guard 1 (self-delete) cannot be what rejects this.
+            var actor = await AddUserAsync(users, "actor@workshop.local", Roles.Admin);
+            await users.RemoveFromRoleAsync(actor, Roles.Admin);
+
+            var result = await service.DeleteUserAsync(actor.Id, onlyAdmin.Id);
+
+            Assert.Equal(UserAdminStatus.CannotRemoveLastAdmin, result.Status);
+            Assert.NotNull(await users.FindByIdAsync(onlyAdmin.Id));
+        }
+
+        [Fact]
+        public async Task CanDeleteAdminWhenAnotherAdminExists()
+        {
+            var (service, users, scope) = await BuildAsync();
+            using var _ = scope;
+            var target = await AddUserAsync(users, "target@workshop.local", Roles.Admin);
+            var actor = await AddUserAsync(users, "actor@workshop.local", Roles.Admin);
+
+            var result = await service.DeleteUserAsync(actor.Id, target.Id);
+
+            Assert.Equal(UserAdminStatus.Success, result.Status);
+            Assert.Null(await users.FindByIdAsync(target.Id));
+        }
+
+        [Fact]
+        public async Task DeleteReturnsNotFoundForUnknownUser()
+        {
+            var (service, users, scope) = await BuildAsync();
+            using var _ = scope;
+            var actor = await AddUserAsync(users, "actor@workshop.local", Roles.Admin);
+
+            var result = await service.DeleteUserAsync(actor.Id, "no-such-id");
+
+            Assert.Equal(UserAdminStatus.UserNotFound, result.Status);
+        }
+
         // A role missing from Roles.All is never seeded and can never be assigned — it would fail
         // silently rather than loudly.
         [Fact]

@@ -20,6 +20,87 @@
     </div>
 </div>
 
+<details class="job-card mb-3" open>
+    <summary>
+        Job card
+        <span class="text-muted small">— @Model.UpdatesNewestFirst.Count update(s)</span>
+    </summary>
+
+    @if (Model.UpdatesNewestFirst.Count == 0)
+    {
+        <p class="text-muted small mt-2">No updates yet.</p>
+    }
+    else
+    {
+        <ul class="list-unstyled job-card-list mt-2">
+            @foreach (var update in Model.UpdatesNewestFirst)
+            {
+                <li class="job-card-entry mb-2 pb-2 border-bottom" data-update-id="@update.Id">
+                    <div class="d-flex justify-content-between">
+                        <span class="fw-semibold">@update.AuthorEmail</span>
+                        <span class="text-muted small">@update.CreatedAtUtc.ToString("d MMM yyyy, HH:mm")</span>
+                    </div>
+                    <p class="mb-1" style="white-space: pre-wrap;">@update.Body</p>
+                    @if (User.IsAdmin())
+                    {
+                        <button type="button" class="btn btn-sm btn-outline-danger job-update-delete" data-update-id="@update.Id">Delete</button>
+                    }
+                </li>
+            }
+        </ul>
+    }
+
+    @if (User.CanUpload())
+    {
+        <form id="add-update-form" class="mt-2">
+            <textarea id="update-body" class="form-control" rows="2" placeholder="Add an update…" maxlength="2000"></textarea>
+            <button type="submit" class="btn btn-sm btn-primary mt-2">Post update</button>
+            <div id="update-error" class="text-danger small mt-1"></div>
+        </form>
+    }
+</details>
+
+@if (User.CanUpload())
+{
+    <script>
+        document.getElementById('add-update-form')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const body = document.getElementById('update-body').value;
+            const response = await fetch('/api/vehicles/@Model.Vehicle.Id/updates', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ body })
+            });
+            // Exact status, not response.ok — a role-denied request answers 302 to
+            // /Account/AccessDenied, which fetch follows to a 200 and would look like success.
+            if (response.status === 200) {
+                window.location.reload();
+            } else {
+                document.getElementById('update-error').textContent =
+                    (await response.text()) || 'Could not post the update.';
+            }
+        });
+    </script>
+}
+
+@if (User.IsAdmin())
+{
+    <script>
+        document.querySelectorAll('.job-update-delete').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                if (!confirm('Delete this update? This cannot be undone.')) return;
+                const id = btn.dataset.updateId;
+                const response = await fetch(`/api/vehicles/updates/${id}`, { method: 'DELETE' });
+                if (response.status === 204) {
+                    document.querySelector(`.job-card-entry[data-update-id="${id}"]`).remove();
+                } else {
+                    alert('Delete failed.');
+                }
+            });
+        });
+    </script>
+}
+
 @if (Model.Vehicle.Photos.Count > 0)
 {
     <details class="coverage-panel mb-3" open>

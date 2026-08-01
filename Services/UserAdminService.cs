@@ -17,6 +17,7 @@ namespace MainProjectNumoPart.Services
         NoChange,
         CannotDemoteSelf,
         CannotRemoveLastAdmin,
+        CannotDeleteSelf,
         IdentityError
     }
 
@@ -131,6 +132,50 @@ namespace MainProjectNumoPart.Services
                 newRole, actingUserId);
 
             return new UserAdminResult(UserAdminStatus.Success, $"{user.Email} is now {newRole}.");
+        }
+
+        public async Task<UserAdminResult> DeleteUserAsync(string actingUserId, string targetUserId)
+        {
+            var user = await _userManager.FindByIdAsync(targetUserId);
+            if (user is null)
+            {
+                return new UserAdminResult(UserAdminStatus.UserNotFound, "User not found.");
+            }
+
+            // You can't be logged in as the account you just deleted — the same "ask another
+            // admin" story as CannotDemoteSelf, and it sidesteps having to reason about what
+            // happens to the current request's auth cookie mid-delete.
+            if (string.Equals(user.Id, actingUserId, StringComparison.Ordinal))
+            {
+                return new UserAdminResult(UserAdminStatus.CannotDeleteSelf,
+                    "You cannot delete your own account. Ask another admin to do it.");
+            }
+
+            // Same invariant ChangeRoleAsync protects, and the comment there predicted this reuse:
+            // never leave the system with zero admins.
+            var currentRoles = await _userManager.GetRolesAsync(user);
+            if (currentRoles.Contains(Roles.Admin))
+            {
+                var admins = await _userManager.GetUsersInRoleAsync(Roles.Admin);
+                if (admins.Count <= 1)
+                {
+                    return new UserAdminResult(UserAdminStatus.CannotRemoveLastAdmin,
+                        "This is the last Admin account. Promote another user to Admin first.");
+                }
+            }
+
+            // Photos.UploaderId is a loose string with no FK — deleting the user leaves it
+            // pointing at nothing. Accepted, not fixed: VehicleDeletionService already makes the
+            // identical tradeoff for vehicle deletes, and UploaderId is never displayed in the UI,
+            // so nothing visibly breaks. Comments/updates are different (see PhotoComment/
+            // VehicleUpdate.AuthorEmail, captured at write time for exactly this reason).
+            var deleted = await _userManager.DeleteAsync(user);
+            if (!deleted.Succeeded) return Failure(deleted);
+
+            _logger.LogInformation("User deleted: {Email} ({UserId}), by {ActorId}",
+                user.Email, user.Id, actingUserId);
+
+            return new UserAdminResult(UserAdminStatus.Success, $"{user.Email} has been deleted.");
         }
 
         public async Task<UserAdminResult> CreateUserAsync(string email, string password, string role)

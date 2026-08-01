@@ -1,5 +1,6 @@
 using MainProjectNumoPart.Authorization;
 using MainProjectNumoPart.Services;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 
 namespace MainProjectNumoPart.Endpoints
@@ -9,6 +10,8 @@ namespace MainProjectNumoPart.Endpoints
         // The typed confirmation travels in a JSON body rather than the query string so VINs and
         // registrations don't end up in ingress access logs.
         public record DeleteVehicleRequest(string? Confirmation);
+
+        public record AddUpdateRequest(string? Body);
 
         public static void MapVehicleEndpoints(this WebApplication app)
         {
@@ -34,6 +37,39 @@ namespace MainProjectNumoPart.Endpoints
                     VehicleDeleteStatus.ConfirmationMismatch => Results.BadRequest(result.Message),
                     _ => Results.NoContent()
                 };
+            }).RequireAuthorization(policy => policy.RequireRole(Roles.Admin));
+
+            group.MapPost("/{id:int}/updates", async (
+                int id,
+                AddUpdateRequest? body,
+                VehicleUpdateService updates,
+                UserManager<IdentityUser> userManager,
+                HttpContext http,
+                CancellationToken ct) =>
+            {
+                var userId = userManager.GetUserId(http.User)!;
+                var email = (await userManager.FindByIdAsync(userId))?.Email ?? userId;
+
+                var result = await updates.AddAsync(id, body?.Body, userId, email, ct);
+
+                return result.Status switch
+                {
+                    NoteStatus.Success => Results.Ok(),
+                    NoteStatus.NotFound => Results.NotFound(),
+                    _ => Results.BadRequest(result.Message)
+                };
+            })
+            // Two arguments, never the comma-joined Roles.StaffOrAdmin constant — see the
+            // tagging endpoint in PhotoEndpoints.cs for why that silently denies everyone.
+            .RequireAuthorization(policy => policy.RequireRole(Roles.Staff, Roles.Admin));
+
+            group.MapDelete("/updates/{updateId:int}", async (
+                int updateId,
+                VehicleUpdateService updates,
+                CancellationToken ct) =>
+            {
+                var result = await updates.DeleteAsync(updateId, ct);
+                return result.Status == NoteStatus.Success ? Results.NoContent() : Results.NotFound();
             }).RequireAuthorization(policy => policy.RequireRole(Roles.Admin));
         }
     }

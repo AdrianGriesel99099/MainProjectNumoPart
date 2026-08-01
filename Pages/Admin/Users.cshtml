@@ -18,6 +18,7 @@
             <th>Email</th>
             <th>Role</th>
             <th>Change role</th>
+            <th>Delete</th>
         </tr>
     </thead>
     <tbody>
@@ -64,6 +65,21 @@
                     </select>
                     <button type="submit" class="btn btn-sm btn-outline-primary">Save</button>
                 </form>
+            </td>
+            <td>
+                @* Server-side guards (UserAdminService.DeleteUserAsync) are the real control —
+                   hiding your own row's button just avoids offering an action that always fails.
+                   The email is read back from a data attribute rather than interpolated into the
+                   onsubmit string directly, so it never has to be escaped for JS string context. *@
+                @if (!isSelf)
+                {
+                    <form method="post" asp-page-handler="Delete"
+                          data-confirm-email="@user.Email"
+                          onsubmit="return confirm('Delete ' + this.dataset.confirmEmail + '? This cannot be undone.')">
+                        <input type="hidden" name="userId" value="@user.Id" />
+                        <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                    </form>
+                }
             </td>
         </tr>
     }
