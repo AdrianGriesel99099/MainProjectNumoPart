@@ -144,3 +144,45 @@ After any significant change, confirm end-to-end by hand:
       vehicle's blobs are gone from **both** the originals and thumbnails containers.
 - [ ] Another vehicle's photos and blobs are untouched.
 - [ ] As Staff, `curl -X DELETE /api/vehicles/{id}` with a *correct* confirmation → still refused.
+
+### Tagging photos by part
+
+Photos carry an optional `Part` (front bumper, left door, etc.) independent of `Stage` — a photo
+has both. Tagging is designed to happen **after** upload in bulk, since the real workflow is
+shooting a burst of photos and sorting them afterwards.
+
+- [ ] Upload a batch with no part set — all land untagged; `/Photos?PartFilter=untagged` finds
+      exactly them. This is the worklist for photos still needing attention.
+- [ ] On a vehicle page, select several photos and use **Set part…** in the selection bar — a
+      badge appears on each; choosing **— clear part —** removes it.
+- [ ] Click **Pick on car** in the selection bar — a rotatable 3D car appears. Drag to orbit,
+      click a panel; the compact dropdown next to it updates to match. If WebGL is unavailable
+      (or the model fails to load within 8s), a flat diagram with the same clickable regions
+      appears instead — the picker never becomes unusable, only less impressive.
+- [ ] At the top of a vehicle page, the **coverage map** shades every part that has at least one
+      photo and leaves the rest blank. Click a shaded part to filter the photo grid to it; click
+      "Show all" to clear the filter. This is deliberately a flat diagram, not the 3D picker — a
+      panel highlighted on the far side of a rotating model is invisible, which defeats a map
+      whose entire point is showing everything at once.
+- [ ] As Viewer, `POST /api/photos/part` with a valid body → refused (302 to AccessDenied).
+      As **Staff** (not just Admin) with the same body → succeeds. Checking the success case
+      matters here specifically: `RequireRole` takes `params string[]`, so a comma-joined role
+      string would deny everyone, Staff included, and only a failure-only test would miss that.
+- [ ] Re-tag a photo that already has a part — the old badge is replaced, not duplicated.
+
+**Regenerating the 3D model.** `wwwroot/models/car.glb` and `car-parts.json` are generated, not
+hand-authored, and both are committed so CI never needs Blender installed. To regenerate after
+changing `Models/Part.cs` or swapping the source mesh:
+
+```bash
+blender --background --python tools/car-model/build_car.py
+```
+
+This reads `tools/car-model/source/car_mesh.glb` (a real sedan mesh, not authored by this repo —
+see the licensing note at the top of `build_car.py` before redistributing it further than
+internal use), recolours it, and generates 33 invisible hitboxes — one per `Part` enum member —
+positioned as fractions of the mesh's own bounding box. `CarModelManifestTests` will fail the
+build if the two ever drift (an enum member renamed without regenerating the model, or vice
+versa). If no source mesh is available, `tools/car-model/build_car_primitive.py` builds a car
+from primitives instead and is a straight drop-in replacement — same output paths, same manifest
+format.
