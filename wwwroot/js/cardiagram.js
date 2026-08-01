@@ -13,6 +13,12 @@
     const LABELS = { front: 'Front', left: 'Left side', rear: 'Rear', right: 'Right side', top: 'Top' };
 
     function initDiagram(root) {
+        // The vehicle page includes this script twice — once directly for the coverage map,
+        // once again inside _CarPicker's fallback. Without this guard the second execution
+        // re-binds every listener on the FIRST diagram too, so one click would fire twice.
+        if (root.dataset.cdInit) return;
+        root.dataset.cdInit = '1';
+
         const stage = root.querySelector('.car-stage');
         const nameEl = root.querySelector('.car-view-name');
         const views = root.querySelectorAll('.car-view');

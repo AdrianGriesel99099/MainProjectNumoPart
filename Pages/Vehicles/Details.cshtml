@@ -70,11 +70,22 @@
    bulk action to share the same selection. *@
 <form id="selection-download-form" data-selection-ids method="post" action="/api/photos/download"></form>
 
+@if (User.CanUpload())
+{
+    @* The 3D picker needs real vertical space that a sticky bottom bar cannot spare, so it
+       lives in a collapsible panel above the bar instead of inline in it. Both it and the
+       compact select in the bar itself target the same #tag-part element. *@
+    <div id="tag-part-panel" class="d-none mb-2">
+        <partial name="_CarPicker" model="@(new MainProjectNumoPart.Pages.Shared.CarPickerModel { ElementId = "selection-car-picker", SelectElementId = "tag-part" })" />
+    </div>
+}
+
 <div id="selection-bar" class="selection-bar d-none">
     <span id="selection-count"></span>
     <span class="flex-spacer"></span>
     @if (User.CanUpload())
     {
+        <button type="button" id="tag-part-toggle" class="btn btn-sm btn-outline-light">Pick on car</button>
         <select id="tag-part" class="form-select form-select-sm" style="width:auto" aria-label="Set part for selected photos">
             <option value="">Set part…</option>
             <option value="__clear__">— clear part —</option>
@@ -140,6 +151,25 @@
 @if (User.CanUpload())
 {
     <script>
+        document.getElementById('tag-part-toggle').addEventListener('click', () => {
+            const panel = document.getElementById('tag-part-panel');
+            panel.classList.toggle('d-none');
+            // The picker measured its container's width while the panel was display:none and
+            // got 0 back — car3d.js now skips sizing to 0 rather than locking it in, but still
+            // needs telling once real layout exists. Without this the canvas stays invisible
+            // even though .car-picker-3d itself is no longer hidden.
+            //
+            // Deferred with setTimeout rather than called synchronously: removing d-none only
+            // SCHEDULES a layout recalculation, it doesn't force one, so a resize() called in
+            // the same tick can still read the pre-toggle clientWidth (0) back — confirmed by
+            // instrumenting car3d.js and finding clientWidth still 0 immediately after the
+            // class was already removed. One tick later, the browser has laid the panel out.
+            setTimeout(() => {
+                const picker = document.getElementById('selection-car-picker');
+                if (picker && picker.resize) picker.resize();
+            }, 0);
+        });
+
         document.getElementById('tag-part').addEventListener('change', async (e) => {
             const raw = e.target.value;
             if (!raw) return;

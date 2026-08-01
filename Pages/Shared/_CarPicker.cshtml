@@ -1,0 +1,33 @@
+@* Pages/Shared/_CarPicker.cshtml
+
+   3D part picker with a 2D fallback. Both keep the same target <select> in sync, so the
+   select is the single source of truth regardless of which one the user actually used —
+   that is also what makes this degrade to "just a dropdown" with zero JS.
+
+   Split from the coverage map deliberately: a highlighted panel on the far side of a 3D
+   model is invisible, which is fine for picking one part but breaks a map meant to show
+   everything at once. Coverage stays on _CarDiagram (2D) for that reason; this partial is
+   picking only.
+*@
+@model MainProjectNumoPart.Pages.Shared.CarPickerModel
+
+<div class="car-picker" id="@Model.ElementId" data-target-select="@Model.SelectElementId">
+    <div class="car-picker-3d" data-state="loading">
+        <div class="car-picker-canvas-wrap">
+            <canvas class="car-picker-canvas"></canvas>
+            <div class="car-picker-loading">Loading 3D view…</div>
+        </div>
+        <div class="car-picker-hint small text-muted">Drag to rotate. Click a panel to select it.</div>
+    </div>
+
+    @* Shown only if WebGL or the model fails to load — see car3d.js. Coverage mode is never
+       used here; this is always the picker variant. *@
+    <div class="car-picker-fallback d-none">
+        <partial name="_CarDiagram" model="@(new MainProjectNumoPart.Pages.Shared.CarDiagramModel { Mode = "picker", ElementId = Model.ElementId + "-fallback-diagram" })" />
+    </div>
+</div>
+
+<script src="~/lib/three/three.min.js"></script>
+<script src="~/lib/three/GLTFLoader.js"></script>
+<script src="~/js/cardiagram.js"></script>
+<script src="~/js/car3d.js"></script>

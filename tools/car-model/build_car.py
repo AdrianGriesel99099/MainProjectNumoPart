@@ -1,4 +1,4 @@
-"""Builds the car used by the 3D part picker, and exports it as glTF.
+"""Builds the car used by the 3D part picker, from a real supplied mesh plus generated hitboxes.
 
 Run:
     blender --background --python tools/car-model/build_car.py
@@ -7,307 +7,281 @@ Outputs (both committed, so CI never needs Blender):
     wwwroot/models/car.glb          the model
     wwwroot/models/car-parts.json   the mesh names in it
 
-WHY GENERATE RATHER THAN DOWNLOAD A MODEL
-Most car models are welded into a single mesh, or grouped by material (paint / glass / chrome).
-Either way you cannot click "left front door" — you click "car". Building it here means every
-panel is a separate named object by construction, which is the whole requirement. It also
-sidesteps the licensing question entirely for a commercial workshop app, and makes the car
-editable source rather than an opaque binary.
+THE SOURCE MESH
+tools/car-model/source/car_mesh.glb is a real sedan mesh (supplied, not authored by this
+script) — two meshes, body and glass, with generic node names ("Object_2", "Object_3") and no
+per-panel structure at all. That absence is exactly the problem the whole car-picker design is
+built around: you cannot click "left front door" on a mesh that has no left front door as a
+separate object, only "the car".
+
+The fix is the same one used for the primitive car in build_car_primitive.py (kept for
+reference — this script supersedes it as the default): generate 33 invisible boxes, one per
+Part enum member, positioned over the visible body and used ONLY for raycasting. The visible
+mesh is never touched or clicked directly; picking, highlighting and the coverage map all work
+against the boxes. Swapping the visible mesh again later (a better scan, a different car) needs
+no code change elsewhere as long as this script is re-run — the hitbox layout is written as
+FRACTIONS of the mesh's own bounding box, not hardcoded metres, so it adapts to whatever shape
+is supplied.
 
 NAMING IS A CONTRACT
-Every object name must match a member of Models/Part.cs exactly. CarModelManifestTests reads
-car-parts.json and fails if the two drift — otherwise renaming an enum member silently produces
-a panel that can never be selected, and nobody notices until someone tries to tag that part.
+Every hitbox name must match a member of Models/Part.cs exactly. CarModelManifestTests reads
+car-parts.json and fails if the two drift.
 
-Dimensions are a real sedan: 4.7m long, 1.8m wide, 1.45m tall, wheelbase 2.7m.
+LICENSING NOTE: car_mesh.glb was supplied directly by the project owner for this purpose. If it
+originates from an asset marketplace (its material names — "CarBase1Mtl", "Carglass1Mtl" — and
+the "e.obj.cleaner.materialmerger.gles" node name suggest an OBJ-to-glTF conversion pipeline
+typical of sites like Sketchfab), check its license permits redistribution inside this
+application before shipping it further than internal use.
 """
 
 import bpy
-import bmesh
 import json
+import math
 import os
-import sys
-from mathutils import Vector
+import mathutils
 
-# ---------------------------------------------------------------- scene setup
+SOURCE_GLB = "car_mesh.glb"
+TARGET_LENGTH = 5.0  # arbitrary scene units; only relative proportions matter for the camera
+
 
 def reset_scene():
     bpy.ops.wm.read_factory_settings(use_empty=True)
 
 
-# ---------------------------------------------------------------- helpers
+def import_and_normalize(repo_root):
+    """Loads the source mesh, recentres it on the origin, scales it to TARGET_LENGTH, and
+    rotates it so +X is the front — matching the axis convention build_car_primitive.py used,
+    so the fractional layout below reads the same way regardless of which script produced the
+    model. Determined by rendering the source from multiple angles and looking at it: the
+    source's own +Y end has the windscreen, mirrors and a numberplate-shaped bumper recess, so
+    +Y is front in its native frame; rotating -90 degrees about Z maps that to +X."""
+    path = os.path.join(repo_root, "tools", "car-model", "source", SOURCE_GLB)
+    bpy.ops.import_scene.gltf(filepath=path)
 
-def add_box(name, center, size, bevel=0.02):
-    """A named box. Bevelled because sharp CG edges are the main thing that makes a
-    procedurally built car look like a stack of crates rather than a vehicle."""
-    bpy.ops.mesh.primitive_cube_add(size=1.0, location=center)
+    mesh_objs = [o for o in bpy.context.scene.objects if o.type == "MESH"]
+
+    # Unparent (keeping each mesh's current world transform as its new local one) so every
+    # later step works with plain matrices and never has to reason about a parent hierarchy.
+    # The two failed attempts before this one BOTH came from that hierarchy: first, setting a
+    # parent empty's .location before accounting for its .scale shifted by the wrong amount
+    # (scale multiplies a child's local coordinates before the parent's translation is added);
+    # then, setting that empty's .rotation_euler had NO effect at all, silently, because
+    # glTF-imported objects default to rotation_mode='QUATERNION' and .rotation_euler is only
+    # read when 'XYZ' mode is active. Composing one matrix and assigning it straight to each
+    # mesh's matrix_world sidesteps both traps — no .location/.rotation_euler/.rotation_mode
+    # ever gets touched.
+    bpy.ops.object.select_all(action="DESELECT")
+    for o in mesh_objs:
+        o.select_set(True)
+    bpy.context.view_layer.objects.active = mesh_objs[0]
+    bpy.ops.object.parent_clear(type="CLEAR_KEEP_TRANSFORM")
+    bpy.context.view_layer.update()
+
+    all_corners = [o.matrix_world @ mathutils.Vector(c) for o in mesh_objs for c in o.bound_box]
+    center = mathutils.Vector((
+        sum(p.x for p in all_corners) / len(all_corners),
+        sum(p.y for p in all_corners) / len(all_corners),
+        sum(p.z for p in all_corners) / len(all_corners),
+    ))
+    ext = max(
+        max(p.x for p in all_corners) - min(p.x for p in all_corners),
+        max(p.y for p in all_corners) - min(p.y for p in all_corners),
+        max(p.z for p in all_corners) - min(p.z for p in all_corners),
+    )
+    scale = TARGET_LENGTH / ext
+
+    # Determined by rendering the source from several angles and looking at it (top, both
+    # sides, front-on): its own +Y end has the windscreen, mirrors and a numberplate-shaped
+    # bumper recess, so +Y is front in its native frame. Rotating -90 degrees about Z maps that
+    # onto +X, matching the front-is-+X convention build_car_primitive.py used, so the
+    # fractional hitbox layout below reads the same way regardless of which script produced
+    # the model.
+    rot = mathutils.Matrix.Rotation(-math.pi / 2, 4, "Z")
+    scale_m = mathutils.Matrix.Scale(scale, 4)
+    recenter = mathutils.Matrix.Translation(-(rot @ scale_m @ center))
+    transform = recenter @ rot @ scale_m
+
+    for o in mesh_objs:
+        o.matrix_world = transform @ o.matrix_world
+    bpy.context.view_layer.update()
+
+    # Bake into the mesh data so every downstream calculation works in plain final coordinates.
+    bpy.context.view_layer.objects.active = mesh_objs[0]
+    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+
+    return mesh_objs
+
+
+def recolor(mesh_objs):
+    """The source materials carry no base color (baseColorFactor is unset, so they render
+    flat grey-white) — recoloring is the other half of what was asked for alongside the
+    hitboxes. Kept close to the primitive car's palette so the two builds don't look like
+    different products if someone compares them."""
+    for obj in mesh_objs:
+        for slot in obj.material_slots:
+            mat = slot.material
+            if mat is None or not mat.use_nodes:
+                continue
+            bsdf = next((n for n in mat.node_tree.nodes if n.type == "BSDF_PRINCIPLED"), None)
+            if bsdf is None:
+                continue
+            name = mat.name.lower()
+            if "glass" in name:
+                bsdf.inputs["Base Color"].default_value = (0.30, 0.40, 0.46, 1.0)
+                bsdf.inputs["Roughness"].default_value = 0.12
+                if "Alpha" in bsdf.inputs:
+                    bsdf.inputs["Alpha"].default_value = 0.55
+                    mat.blend_method = "BLEND"
+            else:
+                # A near-white/grey body technically has colour but doesn't read as coloured
+                # against this app's white page background — it just disappears. A clear mid
+                # blue is visibly a colour choice rather than "the default", while staying a
+                # plausible car paint rather than a garish placeholder.
+                bsdf.inputs["Base Color"].default_value = (0.16, 0.35, 0.62, 1.0)
+                bsdf.inputs["Roughness"].default_value = 0.35
+                bsdf.inputs["Metallic"].default_value = 0.25
+
+
+def hitbox_material():
+    mat = bpy.data.materials.new("Hitbox")
+    mat.use_nodes = True
+    bsdf = mat.node_tree.nodes["Principled BSDF"]
+    # Alpha 0: invisible in the rendered view, but raycasting tests geometry, not material, so
+    # clicks still land on it. Selection is shown by car3d.js bumping this opacity up at
+    # runtime, not by anything baked into the export.
+    bsdf.inputs["Base Color"].default_value = (0.09, 0.37, 0.65, 1.0)
+    if "Alpha" in bsdf.inputs:
+        bsdf.inputs["Alpha"].default_value = 0.0
+    mat.blend_method = "BLEND"
+    return mat
+
+
+def add_hitbox(name, xf, yside, ywidth_frac, zf, bbox, mat):
+    """xf/zf are (from, to) FRACTIONS of the bbox along that axis (0 = min, 1 = max).
+    yside is -1 (right) or +1 (left, matching build_car_primitive.py's convention); ywidth_frac
+    is how far the box extends from that side toward the centreline, as a fraction of the half
+    width — generously wide on purpose. An organic scanned/modelled surface curves in and out
+    of the bounding box in ways a script has no simple analytic handle on, so a slim hitbox
+    tuned to look tidy would miss real clicks on the curved surface; a generous one costs
+    nothing since these boxes are never seen."""
+    xmin, xmax, ymin, ymax, zmin, zmax = bbox
+    x0, x1 = xmin + xf[0] * (xmax - xmin), xmin + xf[1] * (xmax - xmin)
+    z0, z1 = zmin + zf[0] * (zmax - zmin), zmin + zf[1] * (zmax - zmin)
+    half_w = max(ymax, -ymin)
+    y_edge = yside * half_w
+    y_center = yside * half_w * (1.0 - ywidth_frac)
+    y0, y1 = sorted((y_center, y_edge * 1.08))  # 8% past the edge so it isn't clipped by the hull
+
+    bpy.ops.mesh.primitive_cube_add(size=1.0, location=((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2))
     obj = bpy.context.active_object
     obj.name = name
-    obj.scale = Vector(size) * 0.5 * 2.0  # cube is 1 unit; scale is half-extent * 2
-    obj.scale = Vector((size[0], size[1], size[2]))
-    bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
-    if bevel > 0:
-        mod = obj.modifiers.new("Bevel", "BEVEL")
-        mod.width = bevel
-        mod.segments = 3
-        mod.limit_method = "ANGLE"
-        mod.angle_limit = 0.6
+    obj.scale = ((x1 - x0) / 2, (y1 - y0) / 2, (z1 - z0) / 2)
+    obj.data.materials.append(mat)
     return obj
 
 
-def add_cylinder(name, center, radius, depth, axis="X"):
-    bpy.ops.mesh.primitive_cylinder_add(radius=radius, depth=depth, location=center, vertices=32)
+def add_center_hitbox(name, xf, zf, ywidth_frac, bbox, mat):
+    """A hitbox spanning the car's centreline (roof, bonnet, boot, bumpers, windscreens) —
+    same fractional-X/Z addressing as add_hitbox, but centred in Y rather than pinned to a side."""
+    xmin, xmax, ymin, ymax, zmin, zmax = bbox
+    x0, x1 = xmin + xf[0] * (xmax - xmin), xmin + xf[1] * (xmax - xmin)
+    z0, z1 = zmin + zf[0] * (zmax - zmin), zmin + zf[1] * (zmax - zmin)
+    half_w = max(ymax, -ymin) * ywidth_frac
+    bpy.ops.mesh.primitive_cube_add(size=1.0, location=((x0 + x1) / 2, 0, (z0 + z1) / 2))
     obj = bpy.context.active_object
     obj.name = name
-    if axis == "X":
-        obj.rotation_euler[1] = 1.5707963
-    bpy.ops.object.transform_apply(location=False, rotation=True, scale=False)
+    obj.scale = ((x1 - x0) / 2, half_w, (z1 - z0) / 2)
+    obj.data.materials.append(mat)
     return obj
 
 
-def add_profile_solid(name, profile_xz, width, y_center=0.0, bevel=0.015):
-    """Extrudes a 2D side profile (list of (x, z)) sideways into a solid.
+def build_hitboxes(mesh_objs):
+    corners = [o.matrix_world @ mathutils.Vector(c) for o in mesh_objs for c in o.bound_box]
+    xmin = min(p.x for p in corners); xmax = max(p.x for p in corners)
+    ymin = min(p.y for p in corners); ymax = max(p.y for p in corners)
+    zmin = min(p.z for p in corners); zmax = max(p.z for p in corners)
+    bbox = (xmin, xmax, ymin, ymax, zmin, zmax)
 
-    This is what gives the body its car shape — a raked windscreen and a real roofline —
-    instead of the boxy silhouette you get from primitives alone."""
-    mesh = bpy.data.meshes.new(name)
-    obj = bpy.data.objects.new(name, mesh)
-    bpy.context.collection.objects.link(obj)
-
-    bm = bmesh.new()
-    half = width / 2.0
-    verts = [bm.verts.new((x, y_center - half, z)) for (x, z) in profile_xz]
-    face = bm.faces.new(verts)
-
-    # extrude_face_region + an explicit translate, NOT solidify: solidify pushes along the face
-    # normal, whose direction depends on the winding order of the profile points, so a profile
-    # authored clockwise silently extrudes the wrong way and leaves the panel detached from the
-    # car. Extruding and translating by a known vector is direction-independent.
-    ret = bmesh.ops.extrude_face_region(bm, geom=[face])
-    new_verts = [e for e in ret["geom"] if isinstance(e, bmesh.types.BMVert)]
-    bmesh.ops.translate(bm, verts=new_verts, vec=(0.0, width, 0.0))
-    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
-
-    bm.to_mesh(mesh)
-    bm.free()
-
-    if bevel > 0:
-        mod = obj.modifiers.new("Bevel", "BEVEL")
-        mod.width = bevel
-        mod.segments = 2
-        mod.limit_method = "ANGLE"
-        mod.angle_limit = 0.7
-    return obj
-
-
-def shade_smooth(obj):
-    for poly in obj.data.polygons:
-        poly.use_smooth = True
-
-
-# ---------------------------------------------------------------- materials
-
-def make_materials():
-    def mat(name, rgba, rough, metal=0.0):
-        m = bpy.data.materials.new(name)
-        m.use_nodes = True
-        bsdf = m.node_tree.nodes["Principled BSDF"]
-        bsdf.inputs["Base Color"].default_value = rgba
-        bsdf.inputs["Roughness"].default_value = rough
-        bsdf.inputs["Metallic"].default_value = metal
-        return m
-
-    return {
-        "paint": mat("Paint", (0.82, 0.81, 0.78, 1.0), 0.45, 0.10),
-        "glass": mat("Glass", (0.42, 0.52, 0.58, 1.0), 0.12, 0.30),
-        "trim": mat("Trim", (0.18, 0.18, 0.17, 1.0), 0.65),
-        "tyre": mat("Tyre", (0.09, 0.09, 0.08, 1.0), 0.95),
-        "rim": mat("Rim", (0.72, 0.72, 0.70, 1.0), 0.30, 0.70),
-        "lamp": mat("Lamp", (0.95, 0.93, 0.85, 1.0), 0.15),
-        "lampred": mat("LampRed", (0.70, 0.16, 0.14, 1.0), 0.25),
-    }
-
-
-def assign(obj, material):
-    obj.data.materials.clear()
-    obj.data.materials.append(material)
-
-
-# ---------------------------------------------------------------- the car
-# Origin at the centre of the car, +X toward the front, +Y to the left, +Z up.
-
-LENGTH, WIDTH, HEIGHT = 4.70, 1.80, 1.45
-HALF_W = WIDTH / 2.0
-WHEEL_R = 0.33
-AXLE_F, AXLE_R = 1.35, -1.35
-SILL_Z = 0.42
-BELT_Z = 0.98
-ROOF_Z = 1.45
-
-
-def build(mats):
+    mat = hitbox_material()
     parts = {}
 
-    # --- main body: a side profile extruded across the full width -------------
-    # More points than strictly needed: each one lets the bevel round a corner, and rounded
-    # corners are most of what separates "car" from "stack of crates" in a procedural build.
-    body_profile = [
-        (2.35, 0.58), (2.36, 0.78), (2.30, 0.90), (2.10, 0.96),
-        (1.60, 0.99), (1.05, 1.01), (0.45, 1.02),
-        (-1.05, 1.02), (-1.60, 1.00), (-1.95, 0.97), (-2.18, 0.92),
-        (-2.32, 0.80), (-2.34, 0.58), (-2.32, 0.42), (2.32, 0.42),
+    # X fractions: 0 = rear, 1 = front (matches the +X-front convention this mesh was rotated
+    # into above). Z fractions: 0 = ground, 1 = roofline.
+    center_defs = [
+        ("RearBumper", (0.00, 0.07), (0.10, 0.42)),
+        ("BootTailgate", (0.07, 0.30), (0.42, 0.75)),
+        ("RearWindscreen", (0.24, 0.36), (0.55, 0.85)),
+        ("Roof", (0.30, 0.62), (0.85, 1.00)),
+        ("Windscreen", (0.58, 0.70), (0.55, 0.85)),
+        ("Bonnet", (0.66, 0.96), (0.42, 0.75)),
+        ("FrontBumper", (0.93, 1.00), (0.10, 0.42)),
     ]
-    lower = add_profile_solid("BodyLower", body_profile, WIDTH * 0.98)
-    assign(lower, mats["paint"])
-    shade_smooth(lower)
-    parts["_bodyLower"] = lower
+    for name, xf, zf in center_defs:
+        parts[name] = add_center_hitbox(name, xf, zf, 0.94, bbox, mat)
 
-    # --- greenhouse: narrower than the body, which is the "tumblehome" that stops
-    #     a procedural car looking like a slab ---------------------------------
-    # Peaks at 1.41, below the roof plate at 1.44 — at 1.45 the glass poked through the roof
-    # and rendered as loose shards floating above the car.
-    green_profile = [
-        (0.98, 1.00), (0.54, 1.40), (-0.70, 1.41), (-1.30, 1.00),
-    ]
-    green = add_profile_solid("Greenhouse", green_profile, WIDTH * 0.84)
-    assign(green, mats["glass"])
-    shade_smooth(green)
-    parts["_greenhouse"] = green
+    for yside, suffix in ((1, "Left"), (-1, "Right")):
+        side_defs = [
+            ("QuarterRear" + suffix, (0.06, 0.24), (0.30, 0.78)),
+            ("DoorRear" + suffix, (0.24, 0.44), (0.30, 0.78)),
+            ("DoorFront" + suffix, (0.44, 0.64), (0.30, 0.78)),
+            ("WingFront" + suffix, (0.64, 0.86), (0.30, 0.78)),
+            ("Sill" + suffix, (0.22, 0.66), (0.00, 0.14)),
+            ("Headlight" + suffix, (0.94, 1.00), (0.35, 0.58)),
+            ("Taillight" + suffix, (0.00, 0.06), (0.35, 0.58)),
+        ]
+        for name, xf, zf in side_defs:
+            parts[name] = add_hitbox(name, xf, yside, 0.55, zf, bbox, mat)
 
-    # --- panels: thin plates sitting proud of the body. These are the clickable
-    #     meshes; the body beneath is scenery. -------------------------------
-    t = 0.035  # plate thickness
-
-    def side_panel(name, x_center, x_len, z_center, z_len, left):
-        y = (HALF_W * 0.97) if left else -(HALF_W * 0.97)
-        o = add_box(name, (x_center, y, z_center), (x_len, t, z_len))
-        assign(o, mats["paint"])
-        return o
-
-    for left, suffix in ((True, "Left"), (False, "Right")):
-        parts["WingFront" + suffix] = side_panel("WingFront" + suffix, 1.62, 0.85, 0.75, 0.52, left)
-        parts["DoorFront" + suffix] = side_panel("DoorFront" + suffix, 0.72, 0.90, 0.72, 0.56, left)
-        parts["DoorRear" + suffix] = side_panel("DoorRear" + suffix, -0.22, 0.90, 0.72, 0.56, left)
-        parts["QuarterRear" + suffix] = side_panel("QuarterRear" + suffix, -1.35, 1.20, 0.75, 0.52, left)
-        sill = side_panel("Sill" + suffix, 0.25, 1.90, 0.47, 0.14, left)
-        assign(sill, mats["trim"])
-        parts["Sill" + suffix] = sill
-
-        y_m = (HALF_W + 0.08) if left else -(HALF_W + 0.08)
-        mirror = add_box("Mirror" + suffix, (1.02, y_m, 1.02), (0.16, 0.20, 0.10))
-        assign(mirror, mats["trim"])
+        mirror = add_hitbox("Mirror" + suffix, (0.54, 0.62), yside, 1.15, (0.62, 0.78), bbox, mat)
         parts["Mirror" + suffix] = mirror
 
-    # --- horizontal panels ---------------------------------------------------
-    bonnet = add_box("Bonnet", (1.62, 0.0, 1.00), (1.30, WIDTH * 0.88, t))
-    assign(bonnet, mats["paint"])
-    parts["Bonnet"] = bonnet
-
-    boot = add_box("BootTailgate", (-1.80, 0.0, 1.00), (0.95, WIDTH * 0.88, t))
-    assign(boot, mats["paint"])
-    parts["BootTailgate"] = boot
-
-    # Sits on top of the greenhouse and spans its full width, so the cabin reads as a closed
-    # roof rather than a plate hovering over glass.
-    roof = add_box("Roof", (-0.08, 0.0, 1.435), (1.22, WIDTH * 0.845, t * 1.6))
-    assign(roof, mats["paint"])
-    parts["Roof"] = roof
-
-    # --- glass ---------------------------------------------------------------
-    # Centres sit at 1.18, not 1.24. Rotating a box grows its vertical extent by
-    # length/2 * sin(angle), which took the earlier 1.24 centres up to z=1.45 — through the
-    # roof at 1.407, so the glass rendered as shards floating above the car. These end at
-    # ~1.38, just under the roof.
-    ws = add_box("Windscreen", (0.80, 0.0, 1.18), (0.56, WIDTH * 0.80, t))
-    ws.rotation_euler[1] = -0.72
-    bpy.ops.object.transform_apply(location=False, rotation=True, scale=False)
-    assign(ws, mats["glass"])
-    parts["Windscreen"] = ws
-
-    rws = add_box("RearWindscreen", (-1.00, 0.0, 1.18), (0.54, WIDTH * 0.80, t))
-    rws.rotation_euler[1] = 0.75
-    bpy.ops.object.transform_apply(location=False, rotation=True, scale=False)
-    assign(rws, mats["glass"])
-    parts["RearWindscreen"] = rws
-
-    # --- bumpers and lamps ---------------------------------------------------
-    fb = add_box("FrontBumper", (2.30, 0.0, 0.62), (0.14, WIDTH * 0.99, 0.42))
-    assign(fb, mats["trim"])
-    parts["FrontBumper"] = fb
-
-    rb = add_box("RearBumper", (-2.32, 0.0, 0.62), (0.14, WIDTH * 0.99, 0.42))
-    assign(rb, mats["trim"])
-    parts["RearBumper"] = rb
-
-    for left, suffix in ((True, "Left"), (False, "Right")):
-        y = 0.60 if left else -0.60
-        hl = add_box("Headlight" + suffix, (2.28, y, 0.92), (0.10, 0.44, 0.16))
-        assign(hl, mats["lamp"])
-        parts["Headlight" + suffix] = hl
-
-        tl = add_box("Taillight" + suffix, (-2.30, y, 0.94), (0.10, 0.42, 0.17))
-        assign(tl, mats["lampred"])
-        parts["Taillight" + suffix] = tl
-
-    # --- wheels --------------------------------------------------------------
-    for x, fr in ((AXLE_F, "Front"), (AXLE_R, "Rear")):
-        for left, suffix in ((True, "Left"), (False, "Right")):
-            y = (HALF_W - 0.10) if left else -(HALF_W - 0.10)
+    # Wheels: rear axle near x-fraction 0.17, front axle near 0.82 — typical sedan proportions;
+    # not derivable from the mesh without per-wheel geometry isolation, so approximated and
+    # verified by rendering (see docs/LOCAL_DEV.md).
+    for axle_frac, fr in ((0.17, "Rear"), (0.82, "Front")):
+        for yside, suffix in ((1, "Left"), (-1, "Right")):
             name = "Wheel" + fr + suffix
-            tyre = add_cylinder(name, (x, y, WHEEL_R), WHEEL_R, 0.22)
-            assign(tyre, mats["tyre"])
-            shade_smooth(tyre)
-            parts[name] = tyre
+            parts[name] = add_hitbox(name, (axle_frac - 0.09, axle_frac + 0.09), yside, 0.5,
+                                      (0.0, 0.30), bbox, mat)
 
-            rim = add_cylinder(name + "_rim", (x, y * 1.02, WHEEL_R), WHEEL_R * 0.55, 0.23)
-            assign(rim, mats["rim"])
-            shade_smooth(rim)
-            parts["_rim" + name] = rim
-
-    # --- parts with no outside surface. Present so every Part value exists in the
-    #     model, but placed inside the car where they are not clickable clutter;
-    #     the UI offers them as buttons instead. -------------------------------
+    # No honest position on the exterior — present so every Part exists, offered as buttons.
     hidden = {
-        "Interior": (0.0, 0.0, 0.95, (1.9, 1.5, 0.5)),
-        "EngineBay": (1.65, 0.0, 0.80, (1.1, 1.4, 0.35)),
-        "LoadArea": (-1.80, 0.0, 0.80, (0.85, 1.4, 0.30)),
-        "Odometer": (0.62, 0.35, 1.02, (0.22, 0.30, 0.12)),
-        "Undercarriage": (0.0, 0.0, 0.30, (3.9, 1.5, 0.06)),
-        "Other": (0.0, 0.0, 0.62, (0.12, 0.12, 0.12)),
+        "Interior": ((0.35, 0.55), (0.30, 0.65)),
+        "EngineBay": ((0.66, 0.90), (0.20, 0.55)),
+        "LoadArea": ((0.10, 0.28), (0.20, 0.55)),
+        "Odometer": ((0.50, 0.58), (0.45, 0.60)),
+        "Undercarriage": ((0.15, 0.85), (0.00, 0.06)),
+        "Other": ((0.48, 0.52), (0.48, 0.52)),
     }
-    for name, (x, y, z, size) in hidden.items():
-        o = add_box(name, (x, y, z), size, bevel=0.0)
-        assign(o, mats["trim"])
-        o.hide_render = True
-        parts[name] = o
+    for name, (xf, zf) in hidden.items():
+        obj = add_center_hitbox(name, xf, zf, 0.5, bbox, mat)
+        obj.hide_render = True
+        parts[name] = obj
 
     return parts
 
 
-# ---------------------------------------------------------------- export
-
 def main():
     reset_scene()
-    mats = make_materials()
-    parts = build(mats)
-
     repo_root = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+
+    mesh_objs = import_and_normalize(repo_root)
+    recolor(mesh_objs)
+    parts = build_hitboxes(mesh_objs)
+
     out_dir = os.path.join(repo_root, "wwwroot", "models")
     os.makedirs(out_dir, exist_ok=True)
-
     glb_path = os.path.join(out_dir, "car.glb")
+
     bpy.ops.export_scene.gltf(
         filepath=glb_path,
         export_format="GLB",
-        export_apply=True,          # bake the bevel modifiers
+        export_apply=True,
         export_materials="EXPORT",
-        export_yup=True,            # glTF is Y-up; three.js expects it
+        export_yup=True,
     )
 
-    # Only names that are real Part values go in the manifest. Scenery objects are
-    # prefixed with "_" precisely so they are excluded here without a second list to
-    # keep in sync.
-    part_names = sorted(n for n in parts if not n.startswith("_"))
+    part_names = sorted(parts.keys())
     with open(os.path.join(out_dir, "car-parts.json"), "w", encoding="utf-8") as f:
         json.dump({"meshes": part_names}, f, indent=2)
 

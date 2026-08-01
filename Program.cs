@@ -146,7 +146,13 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-app.UseStaticFiles();
+
+// The default static-file provider only serves EXTENSIONS IT RECOGNISES — .glb isn't one, so
+// wwwroot/models/car.glb 404s even though the file is right there. Mapping it explicitly rather
+// than flipping ServeUnknownFileTypes (which would serve anything of any type placed in wwwroot).
+var glbContentTypes = new Microsoft.AspNetCore.StaticFiles.FileExtensionContentTypeProvider();
+glbContentTypes.Mappings[".glb"] = "model/gltf-binary";
+app.UseStaticFiles(new StaticFileOptions { ContentTypeProvider = glbContentTypes });
 
 app.UseRouting();
 
