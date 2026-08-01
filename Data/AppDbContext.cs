@@ -14,6 +14,7 @@ namespace MainProjectNumoPart.Data
         public DbSet<Photo> Photos => Set<Photo>();
         public DbSet<PhotoComment> PhotoComments => Set<PhotoComment>();
         public DbSet<VehicleUpdate> VehicleUpdates => Set<VehicleUpdate>();
+        public DbSet<DamageMark> DamageMarks => Set<DamageMark>();
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -36,6 +37,18 @@ namespace MainProjectNumoPart.Data
             builder.Entity<Photo>()
                 .HasIndex(p => new { p.VehicleId, p.Stage, p.SequenceNumber })
                 .IsUnique();
+
+            // DamageMark.PhotoId is nullable (a mark can be anchored to the generic part diagram
+            // instead of a specific photo), and EF's DEFAULT behaviour for an OPTIONAL foreign
+            // key is SetNull on delete, not cascade — unlike every other relationship in this
+            // file, which are all required and cascade by convention with no config needed. A
+            // photo-anchored mark's X/Y position is meaningless once the photo it points at is
+            // gone, so this one relationship needs an explicit override to actually cascade.
+            builder.Entity<DamageMark>()
+                .HasOne(m => m.Photo)
+                .WithMany()
+                .HasForeignKey(m => m.PhotoId)
+                .OnDelete(DeleteBehavior.Cascade);
         }
     }
 }

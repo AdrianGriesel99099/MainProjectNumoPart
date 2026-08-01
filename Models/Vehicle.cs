@@ -13,5 +13,6 @@ namespace MainProjectNumoPart.Models
 
         public List<Photo> Photos { get; set; } = new();
         public List<VehicleUpdate> VehicleUpdates { get; set; } = new();
+        public List<DamageMark> DamageMarks { get; set; } = new();
     }
 }
