@@ -21,6 +21,13 @@ namespace MainProjectNumoPart.Pages.Photos
         }
 
         [Microsoft.AspNetCore.Mvc.BindProperty(SupportsGet = true)] public Stage? Stage { get; set; }
+
+        // One control in the UI ("All parts" / "Untagged" / each part), but Untagged is not a
+        // Part value — it means Part IS NULL, which needs its own bool on PhotoFilter. Binding
+        // a single string here and splitting it in OnGetAsync keeps that translation in one
+        // place instead of leaking a magic "untagged" enum value into the filter/query layer.
+        [Microsoft.AspNetCore.Mvc.BindProperty(SupportsGet = true)] public string? PartFilter { get; set; }
+
         [Microsoft.AspNetCore.Mvc.BindProperty(SupportsGet = true)] public string? VinOrReg { get; set; }
         [Microsoft.AspNetCore.Mvc.BindProperty(SupportsGet = true)] public DateTime? UploadedFrom { get; set; }
         [Microsoft.AspNetCore.Mvc.BindProperty(SupportsGet = true)] public DateTime? UploadedTo { get; set; }
@@ -31,9 +38,14 @@ namespace MainProjectNumoPart.Pages.Photos
 
         public async Task OnGetAsync()
         {
+            var untagged = PartFilter == "untagged";
+            Part? part = !untagged && Enum.TryParse<Part>(PartFilter, out var parsed) ? parsed : null;
+
             var filter = new PhotoFilter
             {
                 Stage = Stage,
+                Part = part,
+                UntaggedOnly = untagged,
                 VinOrReg = VinOrReg,
                 UploadedFrom = UploadedFrom,
                 UploadedTo = UploadedTo,

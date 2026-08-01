@@ -215,5 +215,99 @@ namespace MainProjectNumoPart.Tests
             Assert.Equal(2, result.Count);
             Assert.True(result[0].UploadedAtUtc > result[1].UploadedAtUtc);
         }
+
+        private static void SeedTaggedPhoto(Data.AppDbContext db, Vehicle vehicle, Part? part, int sequence)
+        {
+            db.Photos.Add(new Photo
+            {
+                VehicleId = vehicle.Id, Stage = Stage.Checkin, Part = part, FileName = "f.jpg",
+                BlobPathOriginal = "o", BlobPathThumbnail = "t", ContentType = "image/jpeg",
+                UploadedAtUtc = DateTime.UtcNow, SequenceNumber = sequence, UploaderId = "u1"
+            });
+        }
+
+        [Fact]
+        public void Apply_FiltersByPart()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var vehicle = new Vehicle { Vin = "V1", BlobFolderName = "V1", CreatedAtUtc = DateTime.UtcNow };
+            db.Vehicles.Add(vehicle);
+            db.SaveChanges();
+            SeedTaggedPhoto(db, vehicle, Part.FrontBumper, 1);
+            SeedTaggedPhoto(db, vehicle, Part.Roof, 2);
+            SeedTaggedPhoto(db, vehicle, null, 3);
+            db.SaveChanges();
+
+            var result = PhotoFilterQuery.Apply(db.Photos, new PhotoFilter { Part = Part.FrontBumper }).ToList();
+
+            Assert.Single(result);
+            Assert.Equal(Part.FrontBumper, result[0].Part);
+        }
+
+        // This is the worklist for tag-after-upload: without it there is no way to find the
+        // photos that still need attention once a batch has been uploaded untagged.
+        [Fact]
+        public void Apply_UntaggedOnly_ReturnsExactlyTheNullPartRows()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var vehicle = new Vehicle { Vin = "V1", BlobFolderName = "V1", CreatedAtUtc = DateTime.UtcNow };
+            db.Vehicles.Add(vehicle);
+            db.SaveChanges();
+            SeedTaggedPhoto(db, vehicle, Part.FrontBumper, 1);
+            SeedTaggedPhoto(db, vehicle, null, 2);
+            SeedTaggedPhoto(db, vehicle, null, 3);
+            db.SaveChanges();
+
+            var result = PhotoFilterQuery.Apply(db.Photos, new PhotoFilter { UntaggedOnly = true }).ToList();
+
+            Assert.Equal(2, result.Count);
+            Assert.All(result, p => Assert.Null(p.Part));
+        }
+
+        // UntaggedOnly must win over a stray Part value rather than the two combining into an
+        // impossible "untagged AND FrontBumper" query that returns nothing.
+        [Fact]
+        public void Apply_UntaggedOnlyTakesPrecedenceOverPart()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var vehicle = new Vehicle { Vin = "V1", BlobFolderName = "V1", CreatedAtUtc = DateTime.UtcNow };
+            db.Vehicles.Add(vehicle);
+            db.SaveChanges();
+            SeedTaggedPhoto(db, vehicle, null, 1);
+            db.SaveChanges();
+
+            var result = PhotoFilterQuery.Apply(
+                db.Photos, new PhotoFilter { UntaggedOnly = true, Part = Part.FrontBumper }).ToList();
+
+            Assert.Single(result);
+        }
+
+        [Fact]
+        public void Apply_PartCombinesWithStage()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var vehicle = new Vehicle { Vin = "V1", BlobFolderName = "V1", CreatedAtUtc = DateTime.UtcNow };
+            db.Vehicles.Add(vehicle);
+            db.SaveChanges();
+            db.Photos.Add(new Photo
+            {
+                VehicleId = vehicle.Id, Stage = Stage.Checkin, Part = Part.Roof, FileName = "a.jpg",
+                BlobPathOriginal = "o1", BlobPathThumbnail = "t1", ContentType = "image/jpeg",
+                UploadedAtUtc = DateTime.UtcNow, SequenceNumber = 1, UploaderId = "u1"
+            });
+            db.Photos.Add(new Photo
+            {
+                VehicleId = vehicle.Id, Stage = Stage.Quote, Part = Part.Roof, FileName = "b.jpg",
+                BlobPathOriginal = "o2", BlobPathThumbnail = "t2", ContentType = "image/jpeg",
+                UploadedAtUtc = DateTime.UtcNow, SequenceNumber = 2, UploaderId = "u1"
+            });
+            db.SaveChanges();
+
+            var result = PhotoFilterQuery.Apply(
+                db.Photos, new PhotoFilter { Part = Part.Roof, Stage = Stage.Checkin }).ToList();
+
+            Assert.Single(result);
+            Assert.Equal(Stage.Checkin, result[0].Stage);
+        }
     }
 }

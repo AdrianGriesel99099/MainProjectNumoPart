@@ -13,6 +13,14 @@
             <option value="@stage" selected="@(Model.Stage == stage)">@stage</option>
         }
     </select>
+    <select name="PartFilter" class="form-select form-select-sm" style="width:auto">
+        <option value="">All parts</option>
+        <option value="untagged" selected="@(Model.PartFilter == "untagged")">Untagged</option>
+        @foreach (var part in Enum.GetValues<Part>())
+        {
+            <option value="@part" selected="@(Model.PartFilter == part.ToString())">@Html.DisplayFor(_ => part)</option>
+        }
+    </select>
     <input type="text" name="VinOrReg" value="@Model.VinOrReg" placeholder="VIN or Reg" class="form-control form-control-sm" style="width:160px" />
     <label class="small">Uploaded</label>
     <input type="date" name="UploadedFrom" value="@Model.UploadedFrom?.ToString("yyyy-MM-dd")" class="form-control form-control-sm" style="width:150px" />
@@ -31,6 +39,10 @@
             <img src="/api/photos/@photo.Id/thumbnail" loading="lazy"
                  alt="@photo.Stage photo for @(photo.Vehicle.Reg ?? photo.Vehicle.Vin)" />
             <span class="photo-seq">@photo.Stage</span>
+            @if (photo.Part is not null)
+            {
+                <span class="photo-part">@Html.DisplayFor(_ => photo.Part)</span>
+            }
         </a>
     }
 </div>
