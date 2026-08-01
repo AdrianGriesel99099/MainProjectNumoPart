@@ -186,3 +186,46 @@ build if the two ever drift (an enum member renamed without regenerating the mod
 versa). If no source mesh is available, `tools/car-model/build_car_primitive.py` builds a car
 from primitives instead and is a straight drop-in replacement — same output paths, same manifest
 format.
+
+### Deleting a user
+
+- [ ] On `/Admin/Users`, your own row has no Delete button at all — it isn't just disabled, it
+      isn't rendered.
+- [ ] Delete another admin while at least one other admin remains → succeeds; the deleted account
+      can no longer log in.
+- [ ] Try to delete the **last** remaining admin (via a direct `POST /Admin/Users?handler=Delete`,
+      since the button is UI-hidden for your own row but this guard is independent of that) →
+      refused with "This is the last Admin account."
+- [ ] Delete a user who has uploaded photos → succeeds, and their old photos still render fine.
+      `Photos.UploaderId` has no FK — this is deliberate, matching the same tradeoff
+      `VehicleDeletionService` already makes for vehicle deletes.
+
+### Job card and photo comments
+
+Two independent free-text logs: a job card per vehicle (`VehicleUpdate`), and comments per photo
+(`PhotoComment`). Both are Staff/Admin to write, everyone to read, Admin-only to delete.
+
+- [ ] Post a job-card update as Staff — appears immediately with your email and timestamp; as
+      Viewer, the add-update form simply isn't shown, and posting directly via
+      `POST /api/vehicles/{id}/updates` → refused. **Confirm Staff specifically succeeds**, not
+      just that Viewer is refused — `RequireRole(Roles.Staff, Roles.Admin)` must stay two
+      arguments; the comma-joined `Roles.StaffOrAdmin` constant would silently deny Staff too, and
+      a denial-only check wouldn't catch that.
+- [ ] Delete a job-card entry as Admin → gone; as Staff → refused.
+- [ ] Open a photo via the small view icon (⤢) on a vehicle page's photo tile — the rest of the
+      tile still toggles multi-select exactly as before; the icon itself does not.
+- [ ] On `/Photos`, click a tile — lands on that photo's page (`/Photos/View/{id}`), not the
+      vehicle page.
+- [ ] On a photo's page, both dates are shown — "Uploaded" always has a value; "Taken" shows
+      "Not recorded" for a photo with no EXIF/manual date rather than a blank or an error.
+- [ ] Post and delete a photo comment, same role rules as the job card above.
+- [ ] Delete the user who wrote a comment or update, then reload the page it's on — the entry
+      still shows their original email. This is `AuthorEmail`, captured once at write time
+      specifically so a later account deletion can't make old comments unattributed.
+
+### Upload feedback
+
+- [ ] Click Upload on a real multi-file batch — the button darkens immediately and swaps to a
+      spinner with "Uploading…" before the page navigates away.
+- [ ] Click it a second time while it's still processing — nothing happens (the button is
+      disabled, so the batch can't be submitted twice).
