@@ -28,7 +28,7 @@
     </div>
 }
 
-<form method="post" enctype="multipart/form-data" class="col-md-6">
+<form id="upload-form" method="post" enctype="multipart/form-data" class="col-md-6">
     @* Rendered only when it has a value, so the no-context path doesn't post an empty VehicleId. *@
     @if (Model.VehicleId.HasValue)
     {
@@ -71,5 +71,20 @@
         <label class="form-label">Photos</label>
         <input asp-for="Files" type="file" class="form-control" multiple accept="image/jpeg,image/png" />
     </div>
-    <button type="submit" class="btn btn-primary">Upload</button>
+    <button type="submit" id="upload-submit" class="btn btn-primary">Upload</button>
 </form>
+
+<script>
+    // A multi-file batch genuinely takes several seconds (each file is buffered, thumbnailed,
+    // and uploaded twice — original and thumbnail — before the redirect), and until now a click
+    // gave no feedback at all. This is a plain form POST, not intercepted with preventDefault, so
+    // the browser's own navigation still happens exactly as before; the spinner is just visible
+    // until the next page loads. The 'submit' event only fires after the browser's own HTML5
+    // validation passes, so a blocked/invalid submission never shows it.
+    document.getElementById('upload-form').addEventListener('submit', () => {
+        const btn = document.getElementById('upload-submit');
+        btn.disabled = true; // blocks a double-click double-submitting the same batch
+        btn.classList.add('btn-clicked');
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Uploading…';
+    });
+</script>

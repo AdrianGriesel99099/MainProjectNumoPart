@@ -166,3 +166,8 @@ body {
 .car-picker-canvas:active { cursor: grabbing; }
 .car-picker-loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; color: #888; background: #f4f3ee; }
 .car-picker-hint { margin-top: 4px; }
+
+/* filter() rather than a hardcoded darker colour so this works on any .btn-* variant without
+   having to match each one's own shade — an immediate visual response on click, independent of
+   the (much longer) spinner that follows once the upload is actually underway. */
+.btn-clicked { filter: brightness(0.82); pointer-events: none; }
