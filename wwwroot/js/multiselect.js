@@ -42,7 +42,9 @@
 
     document.querySelectorAll('.photo-tile').forEach(tile => {
         tile.addEventListener('click', (e) => {
-            if (e.target.classList.contains('photo-delete')) return; // let delete handle its own click
+            // Let delete and view-photo handle their own clicks rather than toggling selection.
+            if (e.target.classList.contains('photo-delete')) return;
+            if (e.target.closest('.photo-view')) return;
             const id = tile.dataset.photoId;
             if (selected.has(id)) {
                 selected.delete(id);

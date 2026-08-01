@@ -16,6 +16,8 @@ namespace MainProjectNumoPart.Endpoints
         // Part is nullable so the same endpoint clears a tag as well as setting one.
         public record SetPartRequest(int[]? Ids, Part? Part);
 
+        public record AddCommentRequest(string? Body);
+
         public static void MapPhotoEndpoints(this WebApplication app)
         {
             var group = app.MapGroup("/api/photos").RequireAuthorization();
@@ -123,6 +125,39 @@ namespace MainProjectNumoPart.Endpoints
 
                 return Results.Empty;
             });
+
+            group.MapPost("/{id:int}/comments", async (
+                int id,
+                AddCommentRequest? body,
+                PhotoCommentService comments,
+                UserManager<IdentityUser> userManager,
+                HttpContext http,
+                CancellationToken ct) =>
+            {
+                var userId = userManager.GetUserId(http.User)!;
+                var email = (await userManager.FindByIdAsync(userId))?.Email ?? userId;
+
+                var result = await comments.AddAsync(id, body?.Body, userId, email, ct);
+
+                return result.Status switch
+                {
+                    NoteStatus.Success => Results.Ok(),
+                    NoteStatus.NotFound => Results.NotFound(),
+                    _ => Results.BadRequest(result.Message)
+                };
+            })
+            // Two arguments, never the comma-joined Roles.StaffOrAdmin constant — see the
+            // tagging endpoint above for why that silently denies everyone.
+            .RequireAuthorization(policy => policy.RequireRole(Roles.Staff, Roles.Admin));
+
+            group.MapDelete("/comments/{commentId:int}", async (
+                int commentId,
+                PhotoCommentService comments,
+                CancellationToken ct) =>
+            {
+                var result = await comments.DeleteAsync(commentId, ct);
+                return result.Status == NoteStatus.Success ? Results.NoContent() : Results.NotFound();
+            }).RequireAuthorization(policy => policy.RequireRole(Roles.Admin));
         }
     }
 }

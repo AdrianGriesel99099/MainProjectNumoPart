@@ -136,6 +136,7 @@
                     {
                         <span class="photo-part">@Html.DisplayFor(_ => photo.Part)</span>
                     }
+                    <a class="photo-view" asp-page="/Photos/View" asp-route-id="@photo.Id" title="View photo">⤢</a>
                     @if (User.IsAdmin())
                     {
                         <button type="button" class="photo-delete" data-photo-id="@photo.Id" title="Delete">×</button>

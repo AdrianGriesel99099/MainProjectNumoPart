@@ -1,0 +1,112 @@
+@* Pages/Photos/View.cshtml *@
+@page "{id:int}"
+@model MainProjectNumoPart.Pages.Photos.ViewModel
+@using MainProjectNumoPart.Models
+@{
+    ViewData["Title"] = $"Photo {Model.Photo.SequenceNumber:000}";
+}
+
+<a asp-page="/Vehicles/Details" asp-route-id="@Model.Photo.VehicleId" class="small">&larr; Back to vehicle</a>
+
+<div class="row mt-2">
+    <div class="col-md-8">
+        <img src="/api/photos/@Model.Photo.Id/original" class="img-fluid rounded" alt="Photo @Model.Photo.SequenceNumber.ToString("000")" />
+    </div>
+    <div class="col-md-4">
+        <dl class="row small">
+            <dt class="col-5">Vehicle</dt>
+            <dd class="col-7">@(Model.Photo.Vehicle.Reg ?? Model.Photo.Vehicle.Vin)</dd>
+
+            <dt class="col-5">Stage</dt>
+            <dd class="col-7">@Model.Photo.Stage</dd>
+
+            <dt class="col-5">Part</dt>
+            <dd class="col-7">@(Model.Photo.Part is null ? "Not tagged" : Html.DisplayFor(_ => Model.Photo.Part).ToString())</dd>
+
+            @* Both dates, per the standing gap: captured on upload but never shown anywhere. *@
+            <dt class="col-5">Uploaded</dt>
+            <dd class="col-7">@Model.Photo.UploadedAtUtc.ToString("d MMM yyyy, HH:mm")</dd>
+
+            <dt class="col-5">Taken</dt>
+            <dd class="col-7">
+                @(Model.Photo.DateTakenUtc?.ToString("d MMM yyyy") ?? "Not recorded")
+            </dd>
+
+            <dt class="col-5">Uploaded by</dt>
+            <dd class="col-7">@(Model.UploaderEmail ?? "(account no longer exists)")</dd>
+        </dl>
+    </div>
+</div>
+
+<h3 class="mt-4">Comments</h3>
+
+<div id="comment-list">
+    @if (Model.CommentsOldestFirst.Count == 0)
+    {
+        <p class="text-muted small">No comments yet.</p>
+    }
+    else
+    {
+        @foreach (var comment in Model.CommentsOldestFirst)
+        {
+            <div class="mb-2 pb-2 border-bottom" data-comment-id="@comment.Id">
+                <div class="d-flex justify-content-between">
+                    <span class="fw-semibold">@comment.AuthorEmail</span>
+                    <span class="text-muted small">@comment.CreatedAtUtc.ToString("d MMM yyyy, HH:mm")</span>
+                </div>
+                <p class="mb-1" style="white-space: pre-wrap;">@comment.Body</p>
+                @if (User.IsAdmin())
+                {
+                    <button type="button" class="btn btn-sm btn-outline-danger comment-delete" data-comment-id="@comment.Id">Delete</button>
+                }
+            </div>
+        }
+    }
+</div>
+
+@if (User.CanUpload())
+{
+    <form id="add-comment-form" class="mt-3 col-md-6">
+        <textarea id="comment-body" class="form-control" rows="2" placeholder="Add a comment…" maxlength="2000"></textarea>
+        <button type="submit" class="btn btn-sm btn-primary mt-2">Post comment</button>
+        <div id="comment-error" class="text-danger small mt-1"></div>
+    </form>
+
+    <script>
+        document.getElementById('add-comment-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const body = document.getElementById('comment-body').value;
+            const response = await fetch('/api/photos/@Model.Photo.Id/comments', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ body })
+            });
+            // Exact status, not response.ok — a role-denied request answers 302 to
+            // /Account/AccessDenied, which fetch follows to a 200 and would look like success.
+            if (response.status === 200) {
+                window.location.reload();
+            } else {
+                document.getElementById('comment-error').textContent =
+                    (await response.text()) || 'Could not post the comment.';
+            }
+        });
+    </script>
+}
+
+@if (User.IsAdmin())
+{
+    <script>
+        document.querySelectorAll('.comment-delete').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                if (!confirm('Delete this comment? This cannot be undone.')) return;
+                const id = btn.dataset.commentId;
+                const response = await fetch(`/api/photos/comments/${id}`, { method: 'DELETE' });
+                if (response.status === 204) {
+                    document.querySelector(`[data-comment-id="${id}"]`).remove();
+                } else {
+                    alert('Delete failed.');
+                }
+            });
+        });
+    </script>
+}
