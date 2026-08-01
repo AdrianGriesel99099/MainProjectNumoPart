@@ -156,21 +156,33 @@ def hitbox_material():
     return mat
 
 
-def add_hitbox(name, xf, yside, ywidth_frac, zf, bbox, mat):
+def add_hitbox(name, xf, yside, ywidth_frac, zf, bbox, mat, outer_reach=1.08):
     """xf/zf are (from, to) FRACTIONS of the bbox along that axis (0 = min, 1 = max).
     yside is -1 (right) or +1 (left, matching build_car_primitive.py's convention); ywidth_frac
     is how far the box extends from that side toward the centreline, as a fraction of the half
     width — generously wide on purpose. An organic scanned/modelled surface curves in and out
     of the bounding box in ways a script has no simple analytic handle on, so a slim hitbox
     tuned to look tidy would miss real clicks on the curved surface; a generous one costs
-    nothing since these boxes are never seen."""
+    nothing since these boxes are never seen.
+
+    outer_reach controls how far past the body hull the box extends (default 8%). THIS IS WHAT
+    MAKES NESTED PARTS (e.g. Spotlamt inside SpotlampGrill inside BumperGrillFront) ACTUALLY
+    PICKABLE IN 3D, which the 2D diagram's DOM-paint-order trick does not translate to: THREE.js
+    raycasting resolves overlaps by literal distance from the camera, not by insertion order, so
+    two boxes sharing the same outer face resolve unpredictably (confirmed empirically — a grid
+    of raycasts against the first version of this model found the two outer boxes but never
+    their nested children at all). Giving each successively-nested part a successively LARGER
+    outer_reach pushes it physically closer to the camera than its parent everywhere their X/Z
+    footprints overlap, so a ray aimed at the child's footprint hits the child's face first,
+    while a ray outside the child's footprint but inside the parent's never reaches the child's
+    box at all and correctly resolves to the parent."""
     xmin, xmax, ymin, ymax, zmin, zmax = bbox
     x0, x1 = xmin + xf[0] * (xmax - xmin), xmin + xf[1] * (xmax - xmin)
     z0, z1 = zmin + zf[0] * (zmax - zmin), zmin + zf[1] * (zmax - zmin)
     half_w = max(ymax, -ymin)
     y_edge = yside * half_w
     y_center = yside * half_w * (1.0 - ywidth_frac)
-    y0, y1 = sorted((y_center, y_edge * 1.08))  # 8% past the edge so it isn't clipped by the hull
+    y0, y1 = sorted((y_center, y_edge * outer_reach))
 
     bpy.ops.mesh.primitive_cube_add(size=1.0, location=((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2))
     obj = bpy.context.active_object
@@ -219,6 +231,25 @@ def build_hitboxes(mesh_objs):
     for name, xf, zf in center_defs:
         parts[name] = add_center_hitbox(name, xf, zf, 0.94, bbox, mat)
 
+    # Grille cluster sits between the bumper (z up to 0.42) and headlights (z from 0.35) —
+    # deliberately overlapping both slightly, the same "later definition wins the overlap"
+    # approach already used on the 2D diagram for this same corner-of-the-car cluster. Each
+    # needs its own width fraction (Main wider than Centre), so these aren't folded into the
+    # uniform-width loop above.
+    #
+    # CentreGrill's front (max-X) face is pushed to 0.985 — deliberately AHEAD of MainGrill's
+    # 0.98 — because unlike the 2D diagram, THREE.js raycasting resolves overlaps by literal
+    # distance from the camera, not paint order. Nesting two boxes with the same front face
+    # makes the OUTER one win unpredictably (confirmed empirically: a raycast grid against the
+    # first version of this model found MainGrill everywhere and never once found CentreGrill).
+    # Pushing the inner box's face fractionally closer to the camera guarantees it wins within
+    # its own footprint, while a ray outside CentreGrill's X/Z range never reaches it at all and
+    # correctly falls through to MainGrill.
+    parts["MainGrill"] = add_center_hitbox("MainGrill", (0.90, 0.98), (0.20, 0.50), 0.65, bbox, mat)
+    parts["CentreGrill"] = add_center_hitbox("CentreGrill", (0.93, 0.985), (0.30, 0.42), 0.30, bbox, mat)
+    parts["FrontSpoiler"] = add_center_hitbox("FrontSpoiler", (0.95, 1.00), (0.00, 0.10), 0.94, bbox, mat)
+    parts["RearSpoiler"] = add_center_hitbox("RearSpoiler", (0.05, 0.10), (0.72, 0.80), 0.94, bbox, mat)
+
     for yside, suffix in ((1, "Left"), (-1, "Right")):
         side_defs = [
             ("QuarterRear" + suffix, (0.06, 0.24), (0.30, 0.78)),
@@ -234,6 +265,44 @@ def build_hitboxes(mesh_objs):
 
         mirror = add_hitbox("Mirror" + suffix, (0.54, 0.62), yside, 1.15, (0.62, 0.78), bbox, mat)
         parts["Mirror" + suffix] = mirror
+
+        # Front bumper corner cluster: BumperGrillFront is the outer opening, SpotlampGrill nests
+        # inside it, Spotlamp nests inside that — same containment as the 2D diagram's version of
+        # this same corner, and for the same reason (a bumper corner really does contain a grille
+        # opening which really does contain a lamp housing).
+        #
+        # A corner part faces the camera along BOTH X (front) and Y (side), unlike the pure-X
+        # grille cluster above or the pure-Y door/wheel hitboxes elsewhere in this function, so
+        # each more-nested level here is pushed fractionally further out on BOTH axes —
+        # increasing outer_reach (Y) and a slightly higher max-X — so raycasting resolves to the
+        # innermost part within its footprint regardless of which angle the corner is viewed
+        # from. Verified against the actual running app, not assumed: a raycast grid at the
+        # default camera angle initially found only the two outermost boxes and never the nested
+        # ones at all (THREE.js resolves overlaps by camera distance, not DOM/paint order the
+        # way the 2D diagram does) — re-tested after this fix before treating it as done.
+        parts["BumperGrillFront" + suffix] = add_hitbox(
+            "BumperGrillFront" + suffix, (0.90, 1.00), yside, 0.35, (0.08, 0.30), bbox, mat,
+            outer_reach=1.06)
+        parts["SpotlampGrill" + suffix] = add_hitbox(
+            "SpotlampGrill" + suffix, (0.92, 1.00), yside, 0.28, (0.10, 0.24), bbox, mat,
+            outer_reach=1.10)
+        parts["Spotlamp" + suffix] = add_hitbox(
+            "Spotlamp" + suffix, (0.94, 1.01), yside, 0.22, (0.13, 0.21), bbox, mat,
+            outer_reach=1.14)
+
+        # Fenderliner and bumper slides are inside the wheel arch / behind the bumper cover —
+        # not visible from outside, so (matching the 2D diagram's button-only treatment) these
+        # only need to exist for car-parts.json completeness, not be findable by clicking the
+        # visible model. Placed small and central, hidden from render like the six original
+        # hidden parts below.
+        for hidden_name, xf, zf in (
+            ("FenderlinerFront" + suffix, (0.68, 0.80), (0.15, 0.30)),
+            ("BumperSlideFront" + suffix, (0.90, 0.96), (0.15, 0.25)),
+            ("BumperSlideRear" + suffix, (0.02, 0.08), (0.15, 0.25)),
+        ):
+            obj = add_hitbox(hidden_name, xf, yside, 0.25, zf, bbox, mat)
+            obj.hide_render = True
+            parts[hidden_name] = obj
 
     # Wheels: rear axle near x-fraction 0.17, front axle near 0.82 — typical sedan proportions;
     # not derivable from the mesh without per-wheel geometry isolation, so approximated and
