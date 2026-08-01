@@ -121,6 +121,23 @@
             <rect class="cp" data-part="WheelFrontLeft" x="24" y="178" width="16" height="22" rx="5" />
             <rect class="cp" data-part="WheelFrontRight" x="210" y="178" width="16" height="22" rx="5" />
             <g class="car-detail"><rect x="92" y="146" width="66" height="18" rx="4" fill="none" /></g>
+
+            @* Ten new front-end parts, deliberately layered AFTER (so they render on top of and
+               take click priority over) the panels they sit within — SpotlampLeft nests inside
+               SpotlampGrillLeft, which nests inside BumperGrillFrontLeft, which itself overlaps
+               the outer edge of FrontBumper. Coordinates verified by getBBox() containment
+               checks (no region escapes its intended parent, no accidental overlap with
+               FrontBumper below), not by eye — the browser pane's screenshot compositor was
+               unavailable when this was built; re-render and look once it's back. *@
+            <rect class="cp" data-part="MainGrill" x="70" y="107" width="110" height="32" />
+            <rect class="cp" data-part="CentreGrill" x="105" y="114" width="40" height="18" rx="2" />
+            <rect class="cp" data-part="FrontSpoiler" x="42" y="176" width="166" height="8" rx="2" />
+            <rect class="cp" data-part="BumperGrillFrontLeft" x="34" y="144" width="34" height="30" rx="4" />
+            <rect class="cp" data-part="BumperGrillFrontRight" x="182" y="144" width="34" height="30" rx="4" />
+            <rect class="cp" data-part="SpotlampGrillLeft" x="40" y="149" width="20" height="18" rx="3" />
+            <rect class="cp" data-part="SpotlampGrillRight" x="190" y="149" width="20" height="18" rx="3" />
+            <circle class="cp" data-part="SpotlampLeft" cx="50" cy="158" r="6" />
+            <circle class="cp" data-part="SpotlampRight" cx="200" cy="158" r="6" />
         </svg>
 
         @* ---------- REAR ---------- *@
@@ -136,6 +153,12 @@
             <rect class="cp" data-part="WheelRearRight" x="210" y="178" width="16" height="22" rx="5" />
             <path class="cp" data-part="Undercarriage" d="M78,180 l94,0 l0,14 l-94,0 Z" />
             <g class="car-detail"><rect x="104" y="86" width="42" height="12" rx="3" fill="none" /></g>
+
+            @* Mounted on the trailing edge of the tailgate, so it deliberately dips 3 units into
+               BootTailgate's own region — placed after it in the DOM, so clicks in that sliver
+               correctly resolve to RearSpoiler, matching the same nested-region pattern used for
+               the front bumper grilles. *@
+            <rect class="cp" data-part="RearSpoiler" x="50" y="67" width="150" height="8" rx="2" />
         </svg>
 
         @* ---------- TOP ---------- *@
@@ -169,10 +192,17 @@
         </svg>
     </div>
 
-    @* These six have no honest position on a drawing of the car's outside, so they are plain
-       buttons rather than invented hotspots that would be harder to find. *@
+    @* These twelve have no honest position on a drawing of the car's outside, so they are plain
+       buttons rather than invented hotspots that would be harder to find. Fenderliners (inside
+       the wheel arch) and bumper slides (mounting brackets behind the bumper cover) joined the
+       original six for the same reason. *@
     <div class="car-extras">
-        @foreach (var part in new[] { Part.Interior, Part.EngineBay, Part.LoadArea, Part.Odometer, Part.Undercarriage, Part.Other })
+        @foreach (var part in new[] {
+            Part.Interior, Part.EngineBay, Part.LoadArea, Part.Odometer, Part.Undercarriage, Part.Other,
+            Part.FenderlinerFrontLeft, Part.FenderlinerFrontRight,
+            Part.BumperSlideFrontLeft, Part.BumperSlideFrontRight,
+            Part.BumperSlideRearLeft, Part.BumperSlideRearRight
+        })
         {
             <button type="button" class="btn btn-sm btn-outline-secondary cp-btn" data-part="@part">@Html.DisplayFor(_ => part)</button>
         }

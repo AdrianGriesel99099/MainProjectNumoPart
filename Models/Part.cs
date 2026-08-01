@@ -48,6 +48,17 @@ namespace MainProjectNumoPart.Models
         [Display(Name = "Rear left wheel")] WheelRearLeft = 26,
         [Display(Name = "Rear right wheel")] WheelRearRight = 27,
 
+        [Display(Name = "Front spoiler")] FrontSpoiler = 34,
+        [Display(Name = "Rear spoiler")] RearSpoiler = 35,
+        [Display(Name = "Main grill")] MainGrill = 36,
+        [Display(Name = "Centre grill")] CentreGrill = 37,
+        [Display(Name = "Left spotlamp")] SpotlampLeft = 38,
+        [Display(Name = "Right spotlamp")] SpotlampRight = 39,
+        [Display(Name = "Left spotlamp grill")] SpotlampGrillLeft = 40,
+        [Display(Name = "Right spotlamp grill")] SpotlampGrillRight = 41,
+        [Display(Name = "Left front bumper grill")] BumperGrillFrontLeft = 42,
+        [Display(Name = "Right front bumper grill")] BumperGrillFrontRight = 43,
+
         // These six have no honest position on a drawing of the car's outside, so the UI offers
         // them as plain buttons rather than inventing hotspots for them.
         [Display(Name = "Interior")] Interior = 28,
@@ -55,6 +66,16 @@ namespace MainProjectNumoPart.Models
         [Display(Name = "Boot interior")] LoadArea = 30,
         [Display(Name = "Odometer / dash")] Odometer = 31,
         [Display(Name = "Undercarriage")] Undercarriage = 32,
-        [Display(Name = "Other / general")] Other = 33
+        [Display(Name = "Other / general")] Other = 33,
+
+        // Fenderliners (inside the wheel arch) and bumper slides (mounting brackets behind the
+        // bumper cover) join the six above for the same reason: not visible from outside the
+        // car, so a diagram/3D hotspot for them would be an invented position, not a real one.
+        [Display(Name = "Left front fenderliner")] FenderlinerFrontLeft = 44,
+        [Display(Name = "Right front fenderliner")] FenderlinerFrontRight = 45,
+        [Display(Name = "Left front bumper slide")] BumperSlideFrontLeft = 46,
+        [Display(Name = "Right front bumper slide")] BumperSlideFrontRight = 47,
+        [Display(Name = "Left rear bumper slide")] BumperSlideRearLeft = 48,
+        [Display(Name = "Right rear bumper slide")] BumperSlideRearRight = 49
     }
 }

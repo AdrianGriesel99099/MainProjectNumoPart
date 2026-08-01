@@ -51,7 +51,23 @@ namespace MainProjectNumoPart.Tests
                 [Part.LoadArea] = 30,
                 [Part.Odometer] = 31,
                 [Part.Undercarriage] = 32,
-                [Part.Other] = 33
+                [Part.Other] = 33,
+                [Part.FrontSpoiler] = 34,
+                [Part.RearSpoiler] = 35,
+                [Part.MainGrill] = 36,
+                [Part.CentreGrill] = 37,
+                [Part.SpotlampLeft] = 38,
+                [Part.SpotlampRight] = 39,
+                [Part.SpotlampGrillLeft] = 40,
+                [Part.SpotlampGrillRight] = 41,
+                [Part.BumperGrillFrontLeft] = 42,
+                [Part.BumperGrillFrontRight] = 43,
+                [Part.FenderlinerFrontLeft] = 44,
+                [Part.FenderlinerFrontRight] = 45,
+                [Part.BumperSlideFrontLeft] = 46,
+                [Part.BumperSlideFrontRight] = 47,
+                [Part.BumperSlideRearLeft] = 48,
+                [Part.BumperSlideRearRight] = 49
             };
 
             foreach (var (part, value) in expected)
