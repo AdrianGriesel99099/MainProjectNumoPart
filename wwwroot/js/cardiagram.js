@@ -1,8 +1,14 @@
 // wwwroot/js/cardiagram.js
 //
-// Drives _CarDiagram.cshtml. Two modes:
+// Drives _CarDiagram.cshtml. Three modes:
 //   picker   — clicking a region selects that part; fires 'carpartselected'
 //   coverage — regions with photos are shaded; clicking one fires 'carpartfiltered'
+//   mark     — clicking a region opens the damage-marking popup; fires 'carpartmarked'
+//
+// 'mark' is its own mode rather than reusing 'coverage' for a second purpose: this diagram
+// instance has no photo-count shading or filtering semantics at all, and a self-documenting
+// mode name is worth the few extra lines over overloading an existing one for something
+// unrelated to what its name says.
 //
 // A part drawn in several views (the roof appears in four) shares one data-part value, so
 // selecting it updates every instance at once. That redundancy is also the bug detector: a
@@ -47,11 +53,13 @@
             });
         }
 
+        const EVENT_BY_MODE = { coverage: 'carpartfiltered', mark: 'carpartmarked' };
+
         function select(part) {
             selected = part;
             paint();
             root.dispatchEvent(new CustomEvent(
-                mode === 'coverage' ? 'carpartfiltered' : 'carpartselected',
+                EVENT_BY_MODE[mode] || 'carpartselected',
                 { bubbles: true, detail: { part: part } }));
         }
 

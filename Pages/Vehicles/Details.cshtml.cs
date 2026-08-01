@@ -32,11 +32,14 @@ namespace MainProjectNumoPart.Pages.Vehicles
 
         public List<VehicleUpdate> UpdatesNewestFirst { get; set; } = new();
 
+        public List<DamageMark> DamageMarksNewestFirst { get; set; } = new();
+
         public async Task<IActionResult> OnGetAsync(int id)
         {
             var vehicle = await _db.Vehicles
                 .Include(v => v.Photos)
                 .Include(v => v.VehicleUpdates)
+                .Include(v => v.DamageMarks).ThenInclude(m => m.Photo)
                 .FirstOrDefaultAsync(v => v.Id == id);
             if (vehicle is null) return NotFound();
 
@@ -54,6 +57,10 @@ namespace MainProjectNumoPart.Pages.Vehicles
 
             UpdatesNewestFirst = vehicle.VehicleUpdates
                 .OrderByDescending(u => u.CreatedAtUtc)
+                .ToList();
+
+            DamageMarksNewestFirst = vehicle.DamageMarks
+                .OrderByDescending(m => m.CreatedAtUtc)
                 .ToList();
 
             return Page();

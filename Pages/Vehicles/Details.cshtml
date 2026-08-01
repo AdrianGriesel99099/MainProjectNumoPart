@@ -101,6 +101,56 @@
     </script>
 }
 
+@* Always rendered, unlike the coverage map below — marking damage should work from the moment
+   a vehicle exists, before any photo has been taken, so it can't depend on Photos.Count. *@
+<details class="mark-damage mb-3">
+    <summary>Mark damage</summary>
+    <p class="small text-muted mt-2 mb-2">Click a part below to record damage against it.</p>
+    <partial name="_CarDiagram" model="@(new MainProjectNumoPart.Pages.Shared.CarDiagramModel { Mode = "mark", ElementId = "damage-diagram" })" />
+</details>
+
+<details class="damage-marks-list mb-3">
+    <summary>
+        Damage marks
+        <span class="text-muted small">— @Model.DamageMarksNewestFirst.Count mark(s)</span>
+    </summary>
+
+    @if (Model.DamageMarksNewestFirst.Count == 0)
+    {
+        <p class="text-muted small mt-2">No damage marks yet.</p>
+    }
+    else
+    {
+        <ul class="list-unstyled mt-2">
+            @foreach (var mark in Model.DamageMarksNewestFirst)
+            {
+                <li class="mb-2 pb-2 border-bottom d-flex gap-2" data-mark-id="@mark.Id">
+                    @if (mark.Photo is not null)
+                    {
+                        <img src="/api/photos/@mark.Photo.Id/thumbnail" style="width:60px;height:45px;object-fit:cover;border-radius:4px;flex-shrink:0" alt="" />
+                    }
+                    else
+                    {
+                        <div class="text-muted small" style="width:60px;flex-shrink:0">(diagram)</div>
+                    }
+                    <div class="flex-grow-1">
+                        <div class="d-flex justify-content-between">
+                            <span class="fw-semibold">@Html.DisplayFor(_ => mark.Part)</span>
+                            <span class="text-muted small">@mark.CreatedAtUtc.ToString("d MMM yyyy, HH:mm")</span>
+                        </div>
+                        <p class="mb-1 small" style="white-space: pre-wrap;">@mark.Note</p>
+                        <span class="text-muted small">@mark.AuthorEmail</span>
+                        @if (User.IsAdmin())
+                        {
+                            <button type="button" class="btn btn-sm btn-outline-danger damage-mark-delete ms-2" data-mark-id="@mark.Id">Delete</button>
+                        }
+                    </div>
+                </li>
+            }
+        </ul>
+    }
+</details>
+
 @if (Model.Vehicle.Photos.Count > 0)
 {
     <details class="coverage-panel mb-3" open>
