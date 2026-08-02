@@ -411,7 +411,7 @@ namespace MainProjectNumoPart.Migrations
                     b.HasOne("MainProjectNumoPart.Models.Photo", "Photo")
                         .WithMany()
                         .HasForeignKey("PhotoId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("MainProjectNumoPart.Models.Vehicle", "Vehicle")
                         .WithMany("DamageMarks")

@@ -41,14 +41,24 @@ namespace MainProjectNumoPart.Data
             // DamageMark.PhotoId is nullable (a mark can be anchored to the generic part diagram
             // instead of a specific photo), and EF's DEFAULT behaviour for an OPTIONAL foreign
             // key is SetNull on delete, not cascade — unlike every other relationship in this
-            // file, which are all required and cascade by convention with no config needed. A
-            // photo-anchored mark's X/Y position is meaningless once the photo it points at is
-            // gone, so this one relationship needs an explicit override to actually cascade.
+            // file, which are all required and cascade by convention with no config needed.
+            //
+            // A photo-anchored mark's X/Y position is meaningless once the photo it points at is
+            // gone, so it still needs cleaning up when a photo is deleted — but NOT via a second
+            // DB-level cascade FK here. DamageMark already cascades from Vehicle directly (below,
+            // by convention), and Photo also cascades from Vehicle — so Vehicle->DamageMark and
+            // Vehicle->Photo->DamageMark would be two DB-enforced cascade paths converging on the
+            // same table. SQLite allows that silently; SQL Server refuses to even create the
+            // table ("may cause cycles or multiple cascade paths"), which is what surfaced this
+            // the first time this migration was applied against production. Restrict here means
+            // no DB-level action on Photo delete; PhotoEndpoints' delete handler removes the
+            // matching DamageMarks itself before removing the Photo, so the end result is
+            // unchanged — the difference is only which layer performs it.
             builder.Entity<DamageMark>()
                 .HasOne(m => m.Photo)
                 .WithMany()
                 .HasForeignKey(m => m.PhotoId)
-                .OnDelete(DeleteBehavior.Cascade);
+                .OnDelete(DeleteBehavior.Restrict);
         }
     }
 }

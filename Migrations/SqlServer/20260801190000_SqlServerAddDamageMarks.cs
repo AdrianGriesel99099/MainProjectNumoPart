@@ -39,12 +39,19 @@ namespace MainProjectNumoPart.Migrations.SqlServer
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_DamageMarks", x => x.Id);
+                    // Restrict, not Cascade: Vehicle->Photo and Vehicle->DamageMark are both
+                    // already cascade paths, so a second one via Photo->DamageMark is a multiple
+                    // cascade path SQL Server refuses at CREATE TABLE time ("may cause cycles or
+                    // multiple cascade paths") — this is exactly what surfaced when this migration
+                    // was first applied against production and rolled back untouched. A
+                    // photo-anchored mark is still cleaned up when its photo is deleted; that now
+                    // happens in PhotoEndpoints' delete handler instead of via this FK.
                     table.ForeignKey(
                         name: "FK_DamageMarks_Photos_PhotoId",
                         column: x => x.PhotoId,
                         principalTable: "Photos",
                         principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
+                        onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
                         name: "FK_DamageMarks_Vehicles_VehicleId",
                         column: x => x.VehicleId,

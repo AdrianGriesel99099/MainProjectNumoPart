@@ -35,7 +35,7 @@ namespace MainProjectNumoPart.Migrations
                         column: x => x.PhotoId,
                         principalTable: "Photos",
                         principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
+                        onDelete: ReferentialAction.Restrict);
                     table.ForeignKey(
                         name: "FK_DamageMarks_Vehicles_VehicleId",
                         column: x => x.VehicleId,

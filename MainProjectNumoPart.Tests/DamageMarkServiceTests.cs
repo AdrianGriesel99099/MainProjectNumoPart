@@ -161,11 +161,16 @@ namespace MainProjectNumoPart.Tests
             Assert.Equal(NoteStatus.NotFound, result.Status);
         }
 
-        // Photo -> DamageMark cascades on delete (configured explicitly in AppDbContext, since
-        // EF's default for an OPTIONAL FK is SetNull, not cascade) — a photo-anchored mark's
-        // X/Y position is meaningless once the photo it points at is gone.
+        // Photo -> DamageMark is Restrict, not Cascade, at the DB level — a second DB-enforced
+        // cascade path into DamageMarks alongside Vehicle->DamageMark is exactly what SQL Server
+        // refuses to create the table over ("may cause cycles or multiple cascade paths"), even
+        // though SQLite allows it. Restrict also turns off EF's own CLIENT-SIDE cascade fixup for
+        // tracked entities (Cascade does both DB- and client-side; Restrict does neither) — so a
+        // raw EF remove of a photo no longer takes its anchored mark down with it, proving cleanup
+        // is no longer automatic and that PhotoEndpoints' explicit "delete the marks, then the
+        // photo" ordering is load-bearing, not an optional nicety copied from elsewhere.
         [Fact]
-        public async Task DeletingThePhotoDeletesItsAnchoredMarkToo()
+        public async Task DeletingAPhotoNoLongerAutomaticallyRemovesItsAnchoredMark()
         {
             using var db = TestDbContextFactory.CreateInMemory();
             var vehicle = SeedVehicle(db);
@@ -175,7 +180,7 @@ namespace MainProjectNumoPart.Tests
             db.Photos.Remove(photo);
             db.SaveChanges();
 
-            Assert.Empty(db.DamageMarks);
+            Assert.Single(db.DamageMarks);
         }
 
         // A diagram-anchored mark never referenced a photo, so deleting an UNRELATED photo on

@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace MainProjectNumoPart.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260801183913_AddDamageMarks")]
+    [Migration("20260802073454_AddDamageMarks")]
     partial class AddDamageMarks
     {
         /// <inheritdoc />
@@ -414,7 +414,7 @@ namespace MainProjectNumoPart.Migrations
                     b.HasOne("MainProjectNumoPart.Models.Photo", "Photo")
                         .WithMany()
                         .HasForeignKey("PhotoId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("MainProjectNumoPart.Models.Vehicle", "Vehicle")
                         .WithMany("DamageMarks")

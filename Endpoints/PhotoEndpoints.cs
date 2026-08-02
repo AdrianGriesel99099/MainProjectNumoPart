@@ -45,6 +45,13 @@ namespace MainProjectNumoPart.Endpoints
 
                 await storage.DeleteOriginalAsync(photo.BlobPathOriginal);
                 await storage.DeleteThumbnailAsync(photo.BlobPathThumbnail);
+
+                // DamageMark.Photo is Restrict, not Cascade, at the DB level (a second DB-level
+                // cascade path into DamageMarks alongside Vehicle->DamageMark is what SQL Server
+                // rejects outright — see the comment in AppDbContext), so a photo-anchored mark's
+                // cleanup happens here in application code instead.
+                var marks = await db.DamageMarks.Where(m => m.PhotoId == id).ToListAsync();
+                db.DamageMarks.RemoveRange(marks);
                 db.Photos.Remove(photo);
                 await db.SaveChangesAsync();
 
