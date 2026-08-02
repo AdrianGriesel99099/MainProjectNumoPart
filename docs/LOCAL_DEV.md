@@ -277,7 +277,14 @@ so against reflective paint a strong outline reads as wireframe scaffolding rath
 - [ ] Click a panel — it stays highlighted in a stronger blue and the part dropdown updates to
       match. **Confirm the highlight is actually visible**, not just that the dropdown changed:
       the alpha-test trap above made it silently invisible once already.
-- [ ] Drag to rotate — no hover tint smears across the bodywork mid-drag.
+- [ ] Drag to rotate — the car eases to a stop rather than halting dead, and no hover tint smears
+      across the bodywork mid-drag.
+- [ ] The car fills the canvas without being clipped. Framing is computed from the model's own
+      bounding sphere, so this should still hold if the mesh is ever swapped.
+
+**Lighting note if you retune the environment:** what reaches the car is roughly panel *area* x
+*intensity*. Splitting one softbox into two narrower ones without raising intensity cuts the total
+light by more than half — which is exactly how the car ended up near-black on the first attempt.
 - [ ] On a *vehicle* page (not Upload), picking a part with no photos selected clears the dropdown
       again straight away. That's the page's own bulk-tag handler, not a picker bug.
 

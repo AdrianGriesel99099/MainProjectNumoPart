@@ -68,11 +68,20 @@
             m.position.set(x, y, z);
             env.add(m);
         }
-        panel(13, 0.4, 9, 0, 6.8, 0, 2.0);     // ceiling softbox — the main highlight
-        panel(0.4, 5, 11, -11.6, 3.2, 0, 0.7); // left fill
-        panel(0.4, 5, 11, 11.6, 3.2, 0, 0.7);  // right fill
-        panel(9, 4, 0.4, 0, 3.0, -11.6, 0.45); // back rim light
-        panel(16, 0.4, 16, 0, -6.8, 0, 0.30);  // floor bounce, keeps sills off pure black
+        // Two narrower ceiling strips rather than one broad slab. A single wide softbox directly
+        // overhead lights the whole roof and bonnet to the same value, which clipped them to flat
+        // white; splitting it leaves a darker lane between the two reflections so horizontal
+        // panels keep some shape instead of blowing out.
+        // Intensity is per-panel but what reaches the car is roughly area x intensity, so
+        // splitting one wide softbox into two narrower ones needs the intensity raised to
+        // compensate — the first attempt kept it flat and cut the total light by more than half,
+        // leaving the car near-black.
+        panel(4.5, 0.4, 11, -2.8, 6.8, 0, 2.4);
+        panel(4.5, 0.4, 11, 2.8, 6.8, 0, 2.4);
+        panel(0.4, 5, 11, -11.6, 3.2, 0, 0.7);  // left fill
+        panel(0.4, 5, 11, 11.6, 3.2, 0, 0.7);   // right fill
+        panel(9, 4, 0.4, 0, 3.0, -11.6, 0.45);  // back rim light
+        panel(16, 0.4, 16, 0, -6.8, 0, 0.30);   // floor bounce, keeps sills off pure black
 
         const pmrem = new THREE.PMREMGenerator(renderer);
         const texture = pmrem.fromScene(env, 0.04).texture;
@@ -180,15 +189,34 @@
         scene.add(dir);
 
         let yaw = 0.6, pitch = 0.35, dist = 6.5;
+        // The drag writes to these; the render loop eases the live values toward them, so
+        // releasing after a flick settles rather than stopping dead. Deliberately a damped follow
+        // and not velocity-based inertia: it cannot overshoot, cannot drift, and needs no
+        // friction constant to tune.
+        let targetYaw = yaw, targetPitch = pitch;
+        const target = new THREE.Vector3(0, 0.5, 0);
+
         function updateCamera() {
             camera.position.set(
-                Math.sin(yaw) * Math.cos(pitch) * dist,
-                Math.sin(pitch) * dist + 0.6,
-                Math.cos(yaw) * Math.cos(pitch) * dist
+                target.x + Math.sin(yaw) * Math.cos(pitch) * dist,
+                target.y + Math.sin(pitch) * dist,
+                target.z + Math.cos(yaw) * Math.cos(pitch) * dist
             );
-            camera.lookAt(0, 0.5, 0);
+            camera.lookAt(target);
         }
         updateCamera();
+
+        // Framed from the model's own bounds instead of a hard-coded distance, so the car fills
+        // the canvas properly and stays framed if the mesh is ever swapped for a different one.
+        function frameModel(box) {
+            const sphere = box.getBoundingSphere(new THREE.Sphere());
+            target.copy(sphere.center);
+            // Fit against the VERTICAL fov, which is the tighter of the two on a landscape
+            // canvas, then pull in slightly — the bounding sphere is sized by the car's length,
+            // so fitting it exactly leaves a lot of dead air above and below.
+            dist = (sphere.radius / Math.sin((camera.fov * Math.PI / 180) / 2)) * 0.78;
+            updateCamera();
+        }
 
         // Manual drag rotation rather than vendoring OrbitControls: this only ever needs yaw
         // and a little pitch clamp, so a full controls library would be dead weight.
@@ -207,10 +235,9 @@
                 return;
             }
             setHover(null); // a hover left showing mid-drag just smears across the bodywork
-            yaw -= (e.clientX - lastX) * 0.01;
-            pitch = Math.max(0.05, Math.min(1.0, pitch + (e.clientY - lastY) * 0.01));
+            targetYaw -= (e.clientX - lastX) * 0.01;
+            targetPitch = Math.max(0.05, Math.min(1.0, targetPitch + (e.clientY - lastY) * 0.01));
             lastX = e.clientX; lastY = e.clientY;
-            updateCamera();
         });
         canvas.addEventListener('pointerleave', () => setHover(null));
 
@@ -316,6 +343,15 @@
 
         function animate() {
             requestAnimationFrame(animate);
+            const dYaw = targetYaw - yaw;
+            const dPitch = targetPitch - pitch;
+            // Threshold rather than easing forever: below this the movement is sub-pixel, and
+            // skipping updateCamera() lets an idle picker settle to a genuinely static scene.
+            if (Math.abs(dYaw) > 0.0002 || Math.abs(dPitch) > 0.0002) {
+                yaw += dYaw * 0.18;
+                pitch += dPitch * 0.18;
+                updateCamera();
+            }
             renderer.render(scene, camera);
         }
 
@@ -394,7 +430,7 @@
                     : new THREE.MeshPhysicalMaterial({
                         // Neutral silver rather than a brand colour, for the same reason the 2D
                         // diagram has no badging: this stands in for every car in the workshop.
-                        color: 0x8b95a2, metalness: 0.7, roughness: 0.22,
+                        color: 0x9aa4b1, metalness: 0.62, roughness: 0.24,
                         clearcoat: 1.0, clearcoatRoughness: 0.05, envMapIntensity: 1.0
                     });
             });
@@ -408,6 +444,8 @@
             contact.scale.set(extent.x * 1.9, extent.z * 2.4, 1); // plane is rotated flat: local Y maps to world Z
             contact.position.set(middle.x, bounds.min.y + 0.01, middle.z);
             scene.add(contact);
+
+            frameModel(bounds);
 
             loadingEl.remove();
             resize();
