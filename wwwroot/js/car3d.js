@@ -38,6 +38,82 @@
         });
     }
 
+    // A compact stand-in for three's RoomEnvironment. That helper lives in examples/jsm and is
+    // NOT part of the UMD bundle we vendor (confirmed: three.min.js contains PMREMGenerator but
+    // no RoomEnvironment), so rather than vendoring a second file to keep in sync on every three
+    // upgrade, the same well-known idea is rebuilt here in a dozen lines: a box "room" with a few
+    // emissive panels standing in for softboxes, prefiltered into a mipmapped radiance map.
+    //
+    // This is what actually makes car paint read as paint. Without an environment to reflect,
+    // metalness and clearcoat have nothing to work with and a metallic surface renders near-black.
+    function buildEnvironment(renderer) {
+        const env = new THREE.Scene();
+        // Deliberately a DARK room with bright panels, not a uniformly bright one. A bright room
+        // reflects the same value from every direction, so a metallic surface returns one flat
+        // tone and the car renders as a near-white blob — which is exactly what the first
+        // version did. Contrast between a hot ceiling and dark walls is what produces the
+        // light-to-dark falloff down the flanks that reads as curved metal.
+        const room = new THREE.Mesh(
+            new THREE.BoxGeometry(24, 14, 24),
+            new THREE.MeshStandardMaterial({ side: THREE.BackSide, color: 0x33373d, roughness: 1 })
+        );
+        env.add(room);
+
+        // Intensity above 1 is deliberate: PMREM captures this scene as HDR, and values >1 are
+        // what produce a hot highlight rolling across the bodywork as it turns.
+        function panel(w, h, d, x, y, z, intensity) {
+            const mat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+            mat.color.multiplyScalar(intensity);
+            const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+            m.position.set(x, y, z);
+            env.add(m);
+        }
+        panel(13, 0.4, 9, 0, 6.8, 0, 2.0);     // ceiling softbox — the main highlight
+        panel(0.4, 5, 11, -11.6, 3.2, 0, 0.7); // left fill
+        panel(0.4, 5, 11, 11.6, 3.2, 0, 0.7);  // right fill
+        panel(9, 4, 0.4, 0, 3.0, -11.6, 0.45); // back rim light
+        panel(16, 0.4, 16, 0, -6.8, 0, 0.30);  // floor bounce, keeps sills off pure black
+
+        const pmrem = new THREE.PMREMGenerator(renderer);
+        const texture = pmrem.fromScene(env, 0.04).texture;
+        pmrem.dispose();
+        env.traverse((o) => { if (o.isMesh) { o.geometry.dispose(); o.material.dispose(); } });
+        return texture;
+    }
+
+    // A soft blob under the car, drawn once into a canvas rather than rendered with a shadow map.
+    // A real shadow map would need a light rig, depth passes and bias tuning every frame for one
+    // static soft shadow; this costs one texture and reads the same at this camera distance. It is
+    // what stops the car looking like it is floating.
+    function buildContactShadow() {
+        const size = 256;
+        const c = document.createElement('canvas');
+        c.width = c.height = size;
+        const g = c.getContext('2d');
+        const grad = g.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+        // Weighted so a good portion stays dark before it falls away: with the camera only ~20°
+        // above the horizon the car covers almost all of its own shadow, so only the outer
+        // margin is ever seen. A gentle centre-out fade put all its density where nothing looks.
+        grad.addColorStop(0, 'rgba(0,0,0,0.62)');
+        grad.addColorStop(0.55, 'rgba(0,0,0,0.42)');
+        grad.addColorStop(0.8, 'rgba(0,0,0,0.14)');
+        grad.addColorStop(1, 'rgba(0,0,0,0)');
+        g.fillStyle = grad;
+        g.fillRect(0, 0, size, size);
+
+        const mesh = new THREE.Mesh(
+            new THREE.PlaneGeometry(1, 1),
+            new THREE.MeshBasicMaterial({
+                map: new THREE.CanvasTexture(c),
+                transparent: true,
+                depthWrite: false // never occlude the car itself
+            })
+        );
+        mesh.rotation.x = -Math.PI / 2;
+        mesh.renderOrder = -1;
+        return mesh;
+    }
+
     function initPicker(root) {
         if (root.dataset.c3dInit) return;
         root.dataset.c3dInit = '1';
@@ -61,6 +137,17 @@
             return;
         }
 
+        // outputEncoding / sRGBEncoding, NOT outputColorSpace / SRGBColorSpace: the vendored
+        // bundle is the 2021-era UMD build, where the newer colour-space API simply does not
+        // exist. Assigning outputColorSpace here would be silently ignored and every colour
+        // would render washed out, with nothing in the console to say why.
+        renderer.outputEncoding = THREE.sRGBEncoding;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 0.95;
+        // Capped at 2: past that the extra pixels cost real frame time on phones and buy nothing
+        // visible on a canvas this size.
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 100);
         const partMeshes = {}; // Part name -> mesh
@@ -83,8 +170,12 @@
             camera.updateProjectionMatrix();
         }
 
-        scene.add(new THREE.HemisphereLight(0xffffff, 0xbcbcb4, 0.9));
-        const dir = new THREE.DirectionalLight(0xffffff, 0.7);
+        // The environment map now does most of the lighting, so these are turned well down from
+        // the flat-shaded values they had before — left in only to keep some directional
+        // definition on the panel creases, which a pure IBL setup renders slightly too evenly.
+        scene.environment = buildEnvironment(renderer);
+        scene.add(new THREE.HemisphereLight(0xffffff, 0xbcbcb4, 0.25));
+        const dir = new THREE.DirectionalLight(0xffffff, 0.35);
         dir.position.set(5, 8, 6);
         scene.add(dir);
 
@@ -105,12 +196,23 @@
         canvas.addEventListener('pointerdown', (e) => { dragging = true; lastX = e.clientX; lastY = e.clientY; canvas.setPointerCapture(e.pointerId); });
         canvas.addEventListener('pointerup', () => { dragging = false; });
         canvas.addEventListener('pointermove', (e) => {
-            if (!dragging) return;
+            if (!dragging) {
+                // Hover feedback. Previously the 3D picker had none at all — you clicked blind
+                // and only found out which panel you'd hit afterwards, from the <select>. It also
+                // does the job the always-on hitbox outlines were doing, but only for the one
+                // part you're pointing at, so the car itself stays clean.
+                const over = pick(e.clientX, e.clientY);
+                setHover(over);
+                canvas.style.cursor = over ? 'pointer' : '';
+                return;
+            }
+            setHover(null); // a hover left showing mid-drag just smears across the bodywork
             yaw -= (e.clientX - lastX) * 0.01;
             pitch = Math.max(0.05, Math.min(1.0, pitch + (e.clientY - lastY) * 0.01));
             lastX = e.clientX; lastY = e.clientY;
             updateCamera();
         });
+        canvas.addEventListener('pointerleave', () => setHover(null));
 
         const raycaster = new THREE.Raycaster();
         function pick(clientX, clientY) {
@@ -136,6 +238,23 @@
             if (mesh) selectPart(mesh.name);
         });
 
+        // Hitboxes are hidden by ALPHA TEST, not by transparency: the exported material carries
+        // alphaTest 0.5 with opacity 0 and transparent:false, so the shader discards every
+        // fragment and the box is unseen while still being raycastable.
+        //
+        // That matters because the obvious way to reveal one — raising opacity — does nothing on
+        // its own. transparent:false means opacity is ignored entirely, and even once it is
+        // honoured, any value below alphaTest is still discarded. All three properties have to
+        // move together. The previous code guarded on `if (m.transparent)`, which is false here,
+        // so it silently never ran and the selection highlight never actually appeared; the
+        // property values looked correct in isolation, which is exactly how it went unnoticed.
+        function revealHitbox(material, opacity) {
+            material.transparent = true;
+            material.opacity = opacity;
+            material.alphaTest = 0;
+            material.depthWrite = false; // otherwise a revealed box occludes the bodywork behind it
+        }
+
         function highlight(mesh) {
             if (selectedMesh && originalMaterials.has(selectedMesh)) {
                 selectedMesh.material = originalMaterials.get(selectedMesh);
@@ -146,19 +265,35 @@
                 const m = originalMaterials.get(mesh).clone();
                 m.emissive = new THREE.Color(0x185fa5);
                 m.emissiveIntensity = 0.55;
-                // Hitbox meshes (car_mesh.glb-derived models) are exported fully transparent —
-                // invisible on purpose, since they exist only to be raycast against, not seen.
-                // Emissive alone is invisible at opacity 0, so a selected hitbox needs its
-                // opacity raised too; a real visible panel (the primitive-car build) already has
-                // opacity 1 and this is a harmless no-op for it.
-                if (m.transparent) {
-                    m.opacity = Math.max(m.opacity, 0.45);
-                }
+                revealHitbox(m, 0.5);
+                mesh.material = m;
+            }
+        }
+
+        // Kept strictly separate from highlight(): hover is transient and must never disturb the
+        // selected part's material, or moving the mouse away would silently clear a selection the
+        // user had already made. Hence the mesh !== selectedMesh guards on both paths.
+        let hoveredMesh = null;
+        function setHover(mesh) {
+            if (mesh === hoveredMesh) return;
+            if (hoveredMesh && hoveredMesh !== selectedMesh && originalMaterials.has(hoveredMesh)) {
+                hoveredMesh.material = originalMaterials.get(hoveredMesh);
+            }
+            hoveredMesh = mesh;
+            if (mesh && mesh !== selectedMesh) {
+                if (!originalMaterials.has(mesh)) originalMaterials.set(mesh, mesh.material);
+                const m = originalMaterials.get(mesh).clone();
+                m.color = new THREE.Color(0x185fa5);
+                // Lighter than a selection, so the two never read as the same state.
+                revealHitbox(m, 0.26);
                 mesh.material = m;
             }
         }
 
         function selectPart(name) {
+            // Drop any hover styling on the incoming mesh first, so highlight() caches and
+            // restores the real material rather than the translucent hover clone.
+            setHover(null);
             highlight(partMeshes[name] || null);
             if (select) {
                 select.value = name || '';
@@ -210,8 +345,15 @@
             const validNames = new Set(manifest.meshes);
             modelRoot = gltf.scene;
             modelRoot.traverse((obj) => {
-                if (obj.isMesh && validNames.has(obj.name)) {
+                if (!obj.isMesh) return;
+
+                if (validNames.has(obj.name)) {
                     partMeshes[obj.name] = obj;
+
+                    // Hitboxes must stay invisible, so they are explicitly opted OUT of the new
+                    // environment map — without this, an IBL setup puts reflections on a surface
+                    // whose whole job is to be unseen until selected.
+                    if (obj.material) obj.material.envMapIntensity = 0;
 
                     // Hitboxes are invisible by design (opacity 0, only bumped up on selection —
                     // see highlight() below), so with 49 of them now packed edge-to-edge and
@@ -221,14 +363,51 @@
                     // bookkeeping) draws that boundary. Always visible, not just on hover or
                     // selection — the point is seeing every division at a glance, the moment the
                     // model loads.
+                    // Dark, not light. Against the old flat-grey model a pale line was the only
+                    // thing that showed; against reflective paint the same line reads as white
+                    // scaffolding sitting on top of the car. A dark line at low opacity reads
+                    // instead as a panel gap, which is what it is standing in for.
                     const edges = new THREE.LineSegments(
                         new THREE.EdgesGeometry(obj.geometry),
-                        new THREE.LineBasicMaterial({ color: 0x8a8a86, transparent: true, opacity: 0.18 })
+                        new THREE.LineBasicMaterial({ color: 0x1c1e22, transparent: true, opacity: 0.10 })
                     );
                     obj.add(edges);
+                    return;
                 }
+
+                // Everything not in the manifest is scenery — the body shell and glazing that
+                // make the model read as a car. Replacing their materials HERE, at load time,
+                // rather than baking them into the .glb keeps build_car.py, the committed model
+                // and CarModelManifestTests entirely out of this change.
+                // Matched against the MATERIAL name as well as the object name, and that is the
+                // part that actually does the work: the exported objects are called "Object_2"
+                // and "Object_3", carrying nothing useful, while their materials are
+                // "Carglass1Mtl" and "CarBase1Mtl". Testing obj.name alone silently gave the
+                // glazing body paint — found by dumping both names at runtime, not by reading
+                // the exporter's output and assuming.
+                const label = obj.name + ' ' + ((obj.material && obj.material.name) || '');
+                obj.material = /glass|screen|window/i.test(label)
+                    ? new THREE.MeshPhysicalMaterial({
+                        color: 0x2c343a, metalness: 0, roughness: 0.06,
+                        transparent: true, opacity: 0.62, envMapIntensity: 1.6
+                    })
+                    : new THREE.MeshPhysicalMaterial({
+                        // Neutral silver rather than a brand colour, for the same reason the 2D
+                        // diagram has no badging: this stands in for every car in the workshop.
+                        color: 0x8b95a2, metalness: 0.7, roughness: 0.22,
+                        clearcoat: 1.0, clearcoatRoughness: 0.05, envMapIntensity: 1.0
+                    });
             });
             scene.add(modelRoot);
+
+            // Sized from the model's own bounds so it stays correct if the mesh is ever swapped.
+            const bounds = new THREE.Box3().setFromObject(modelRoot);
+            const extent = bounds.getSize(new THREE.Vector3());
+            const middle = bounds.getCenter(new THREE.Vector3());
+            const contact = buildContactShadow();
+            contact.scale.set(extent.x * 1.9, extent.z * 2.4, 1); // plane is rotated flat: local Y maps to world Z
+            contact.position.set(middle.x, bounds.min.y + 0.01, middle.z);
+            scene.add(contact);
 
             loadingEl.remove();
             resize();

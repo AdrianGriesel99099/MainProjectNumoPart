@@ -250,16 +250,36 @@ rather than getting an invented hotspot).
       camera distance, not click order — if the innermost part were ever unreachable after a
       future `build_car.py` change, this is the symptom to watch for.)
 
-### 3D panel lines
+### 3D picker rendering
 
-Every hitbox in the 3D model now renders a thin, low-opacity outline (`THREE.EdgesGeometry` +
-`LineSegments`, added client-side in `car3d.js` — no Blender regeneration needed for this part).
-Hitboxes are deliberately oversized past the visible body hull and have no shared-edge data, so
-these are an approximation, not literal panel-gap geometry.
+The picker renders with an environment map (built procedurally in `car3d.js` — three's
+`RoomEnvironment` is an examples/ module and is not in the UMD bundle we vendor), clearcoat car
+paint, tinted glass, a canvas-drawn contact shadow, and ACES tone mapping. All of it is applied at
+load time to the *scenery* meshes only; `car.glb`, `build_car.py` and the 49 hitboxes are untouched.
 
-- [ ] Open the 3D picker and rotate the car — every visible panel has a faint separating line from
-      its neighbours, not just the currently-selected one, and it's genuinely legible rather than
-      a noisy tangle of disconnected boxes.
+Hitbox outlines are still drawn but very faint. They are oversized boxes with no shared-edge data,
+so against reflective paint a strong outline reads as wireframe scaffolding rather than panel gaps
+— hover now does that job instead, for the one part you're pointing at.
+
+**Two traps worth knowing if you touch this file:**
+
+- The vendored three is the 2021 UMD build. Use `renderer.outputEncoding` / `THREE.sRGBEncoding`,
+  **not** `outputColorSpace` / `SRGBColorSpace` — the newer API doesn't exist there, so assigning
+  it is silently ignored and everything renders washed out with nothing in the console.
+- Hitboxes are hidden by **alpha test** (`alphaTest: 0.5`, `opacity: 0`, `transparent: false`),
+  not by transparency. Raising opacity alone does nothing: `transparent:false` ignores opacity
+  outright, and any value under `alphaTest` is discarded anyway. Use `revealHitbox()`, which moves
+  all three together.
+
+- [ ] Open the 3D picker — the car reads as metallic paint with a highlight rolling across it as
+      you drag, tinted glass distinct from the bodywork, and a soft shadow under it (not floating).
+- [ ] Hover over a panel — it tints blue and the cursor becomes a pointer. Moving away clears it.
+- [ ] Click a panel — it stays highlighted in a stronger blue and the part dropdown updates to
+      match. **Confirm the highlight is actually visible**, not just that the dropdown changed:
+      the alpha-test trap above made it silently invisible once already.
+- [ ] Drag to rotate — no hover tint smears across the bodywork mid-drag.
+- [ ] On a *vehicle* page (not Upload), picking a part with no photos selected clears the dropdown
+      again straight away. That's the page's own bulk-tag handler, not a picker bug.
 
 ### Damage marking
 
