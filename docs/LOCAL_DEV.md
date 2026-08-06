@@ -170,22 +170,22 @@ shooting a burst of photos and sorting them afterwards.
       string would deny everyone, Staff included, and only a failure-only test would miss that.
 - [ ] Re-tag a photo that already has a part — the old badge is replaced, not duplicated.
 
-**Regenerating the 3D model.** `wwwroot/models/car.glb` and `car-parts.json` are generated, not
-hand-authored, and both are committed so CI never needs Blender installed. To regenerate after
-changing `Models/Part.cs` or swapping the source mesh:
+**The 3D model has no source mesh and no build step.** There used to be a Blender pipeline
+(`tools/car-model/build_car.py` reading a supplied `car_mesh.glb`, generating `wwwroot/models/
+car.glb` + `car-parts.json`) — that whole pipeline is gone. `wwwroot/js/car-body.js` generates the
+car entirely in the browser, at page-load time, from parametric surface data (a station table of
+measured cross-sections, lofted into a mesh, the same way the reference build this was ported from
+does it). There is nothing to regenerate; editing `car-body.js` and reloading the page **is** the
+edit-and-see loop.
 
-```bash
-blender --background --python tools/car-model/build_car.py
-```
-
-This reads `tools/car-model/source/car_mesh.glb` (a real sedan mesh, not authored by this repo —
-see the licensing note at the top of `build_car.py` before redistributing it further than
-internal use), recolours it, and generates 49 hitboxes — one per `Part` enum member, most visible
-and clickable, six hidden (`hide_render=True`) for parts with no exterior shape — positioned as
-fractions of the mesh's own bounding box. `CarModelManifestTests` will fail the build if the two
-ever drift (an enum member renamed without regenerating the model, or vice versa). If no source
-mesh is available, `tools/car-model/build_car_primitive.py` builds a car from primitives instead
-and is a straight drop-in replacement — same output paths, same manifest format.
+Each clickable panel is registered as `B.PartName = [...]` (one or more real meshes — some parts,
+like `FrontBumper`, are several patches sharing one click target), where `PartName` must be an
+exact `Models/Part.cs` member name. `CarModelManifestTests` reads `car-body.js`'s own source text
+(a regex over `B.PartName =` assignments, since there's no separate manifest file to diff against
+any more) and fails the build if a `Part` member and a `car-body.js` registration ever drift apart
+— same intent as the old Blender-era test, just pointed at the new source of truth. Six parts
+(`Interior`, `EngineBay`, `LoadArea`, `Odometer`, `Undercarriage`, `Other`) are correctly absent —
+they have no honest position on the outside of a car and stay button-only, same as the 2D diagram.
 
 ### Deleting a user
 
@@ -246,45 +246,53 @@ rather than getting an invented hotspot).
       photo can be tagged to any of the 16 like any other part.
 - [ ] In the 3D picker, rotating past the nested front-corner parts (Spotlamp inside its grill
       inside the bumper grill) — the innermost one is reachable by click, not permanently occluded
-      by its parent's larger hitbox. (This nesting is exactly why 3D hitbox overlap resolves by
-      camera distance, not click order — if the innermost part were ever unreachable after a
-      future `build_car.py` change, this is the symptom to watch for.)
+      by its parent. Real geometry means THREE.js's own camera-distance hit resolution just
+      handles this; if the innermost part were ever unreachable after a `car-body.js` change, that
+      would mean its geometry got fully hidden behind its parent's, not a hitbox-layering bug.
 
 ### 3D picker rendering
 
-The picker renders with an environment map (built procedurally in `car3d.js` — three's
-`RoomEnvironment` is an examples/ module and is not in the UMD bundle we vendor), clearcoat car
-paint, tinted glass, a canvas-drawn contact shadow, and ACES tone mapping. All of it is applied at
-load time to the *scenery* meshes only; `car.glb`, `build_car.py` and the 49 hitboxes are untouched.
+`car3d.js` renders with an environment map (built procedurally — three's `RoomEnvironment` is an
+examples/ module and is not in the UMD bundle we vendor), clearcoat car paint, tinted glass, a
+canvas-drawn contact shadow, and ACES tone mapping, applied to whatever `car-body.js` builds.
+Panels are real, already-painted meshes — clicking one *is* clicking the bodywork, not an
+invisible box floating over it, so there's no separate hitbox-outline layer to draw any more.
 
-Hitbox outlines are still drawn but very faint. They are oversized boxes with no shared-edge data,
-so against reflective paint a strong outline reads as wireframe scaffolding rather than panel gaps
-— hover now does that job instead, for the one part you're pointing at.
-
-**Two traps worth knowing if you touch this file:**
+**Two traps worth knowing if you touch either file:**
 
 - The vendored three is the 2021 UMD build. Use `renderer.outputEncoding` / `THREE.sRGBEncoding`,
   **not** `outputColorSpace` / `SRGBColorSpace` — the newer API doesn't exist there, so assigning
   it is silently ignored and everything renders washed out with nothing in the console.
-- Hitboxes are hidden by **alpha test** (`alphaTest: 0.5`, `opacity: 0`, `transparent: false`),
-  not by transparency. Raising opacity alone does nothing: `transparent:false` ignores opacity
-  outright, and any value under `alphaTest` is discarded anyway. Use `revealHitbox()`, which moves
-  all three together.
+- A `Part` can be **several real meshes** sharing one click target (`FrontBumper` is a nose cap
+  plus three body patches; `car-body.js` wraps them in a `THREE.Group` named `FrontBumper` with
+  `userData.isPart = true`). Raycasting only ever hits a *leaf* mesh, never the group — `pick()`
+  walks up `.parent` looking for `isPart` to find the whole part, and `highlight()`/`setHover()`
+  use `group.traverse()` to tint every mesh inside it, not just the one struck. Tinting only the
+  hit leaf directly (skipping the group entirely) silently highlights one panel of a multi-panel
+  part instead of the whole thing — confirm a highlight covers every mesh of a part like
+  `RearSpoiler` (three separate patches), not just whichever one happened to catch the ray.
 
 - [ ] Open the 3D picker — the car reads as metallic paint with a highlight rolling across it as
-      you drag, tinted glass distinct from the bodywork, and a soft shadow under it (not floating).
-- [ ] Hover over a panel — it tints blue and the cursor becomes a pointer. Moving away clears it.
-- [ ] Click a panel — it stays highlighted in a stronger blue and the part dropdown updates to
-      match. **Confirm the highlight is actually visible**, not just that the dropdown changed:
-      the alpha-test trap above made it silently invisible once already.
+      you drag, tinted glass distinct from the bodywork, alloy wheels with visible brake calipers,
+      and a soft shadow under it (not floating).
+- [ ] Hover over a panel — it tints ice-blue (`--ice`) and the cursor becomes a pointer. Moving
+      away clears it.
+- [ ] Click a panel — it stays highlighted in amber (`--amber`, stronger than the hover tint so the
+      two never read as the same state) and the part dropdown updates to match.
+- [ ] Click a **multi-mesh** part (e.g. `FrontBumper` or `RearSpoiler`) — every mesh making up that
+      part is tinted, not just one patch of it.
 - [ ] Drag to rotate — the car eases to a stop rather than halting dead, and no hover tint smears
       across the bodywork mid-drag.
 - [ ] The car fills the canvas without being clipped. Framing is computed from the model's own
       bounding sphere, so this should still hold if the mesh is ever swapped.
+- [ ] Rotate all the way around (and look from above/below) — every one of the 43 3D-visible parts
+      is reachable from *some* angle. Unlike the old invisible-box hitboxes, real geometry has real
+      occlusion: you cannot click the rear bumper from the front, which is expected, not a bug.
 
 **Lighting note if you retune the environment:** what reaches the car is roughly panel *area* x
 *intensity*. Splitting one softbox into two narrower ones without raising intensity cuts the total
 light by more than half — which is exactly how the car ended up near-black on the first attempt.
+
 - [ ] On a *vehicle* page (not Upload), picking a part with no photos selected clears the dropdown
       again straight away. That's the page's own bulk-tag handler, not a picker bug.
 

@@ -43,9 +43,9 @@
         <label asp-for="Part" class="form-label">Part (optional — you can tag these later instead)</label>
         @* Built manually rather than via Html.GetEnumSelectList<Part>(), which renders option
            VALUES as the numeric enum value ("14"), not the name — the 3D and 2D pickers set
-           this select's value to the enum NAME (matching the mesh names in car.glb), so numeric
-           values would silently fail to match any option. Model binding accepts either form on
-           POST, so this only affects the JS sync, not the submit itself. *@
+           this select's value to the enum NAME (matching the part group names car-body.js
+           registers), so numeric values would silently fail to match any option. Model binding
+           accepts either form on POST, so this only affects the JS sync, not the submit itself. *@
         <select asp-for="Part" class="form-select mb-2">
             <option value="">— not set —</option>
             @foreach (var part in Enum.GetValues<MainProjectNumoPart.Models.Part>())

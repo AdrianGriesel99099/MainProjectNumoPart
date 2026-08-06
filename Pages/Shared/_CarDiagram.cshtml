@@ -150,8 +150,9 @@
                inside BumperGrillFrontLeft, which sits within FrontBumper; CentreGrill nests
                inside MainGrill. This ordering is load-bearing — SVG resolves overlapping hits by
                document order, so moving any of these earlier makes the smaller one unreachable.
-               (The 3D picker needed a completely different fix for the same nesting, because
-               THREE.js resolves overlaps by camera distance instead — see build_car.py.) *@
+               (The 3D picker doesn't have this problem: car-body.js gives nested parts like
+               SpotlampLeft real, separately-occluding geometry rather than overlapping invisible
+               boxes, so THREE.js's own camera-distance hit resolution just works.) *@
             <rect class="cp" data-part="MainGrill" x="102" y="88" width="86" height="26" rx="3" />
             <rect class="cp" data-part="CentreGrill" x="126" y="94" width="38" height="14" rx="2" />
             <rect class="cp" data-part="FrontSpoiler" x="38" y="178" width="214" height="14" rx="3" />
