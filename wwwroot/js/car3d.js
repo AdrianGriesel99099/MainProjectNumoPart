@@ -39,80 +39,79 @@
         });
     }
 
-    // A compact stand-in for three's RoomEnvironment. That helper lives in examples/jsm and is
-    // NOT part of the UMD bundle we vendor (confirmed: three.min.js contains PMREMGenerator but
-    // no RoomEnvironment), so rather than vendoring a second file to keep in sync on every three
-    // upgrade, the same well-known idea is rebuilt here in a dozen lines: a box "room" with a few
-    // emissive panels standing in for softboxes, prefiltered into a mipmapped radiance map.
-    //
-    // This is what actually makes car paint read as paint. Without an environment to reflect,
-    // metalness and clearcoat have nothing to work with and a metallic surface renders near-black.
-    function buildEnvironment(renderer) {
-        const env = new THREE.Scene();
-        // Deliberately a DARK room with bright panels, not a uniformly bright one. A bright room
-        // reflects the same value from every direction, so a metallic surface returns one flat
-        // tone and the car renders as a near-white blob — which is exactly what the first
-        // version did. Contrast between a hot ceiling and dark walls is what produces the
-        // light-to-dark falloff down the flanks that reads as curved metal.
-        const room = new THREE.Mesh(
-            new THREE.BoxGeometry(24, 14, 24),
-            new THREE.MeshStandardMaterial({ side: THREE.BackSide, color: 0x33373d, roughness: 1 })
-        );
-        env.add(room);
-
-        // Intensity above 1 is deliberate: PMREM captures this scene as HDR, and values >1 are
-        // what produce a hot highlight rolling across the bodywork as it turns.
-        function panel(w, h, d, x, y, z, intensity) {
-            const mat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-            mat.color.multiplyScalar(intensity);
-            const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
-            m.position.set(x, y, z);
-            env.add(m);
-        }
-        // Two narrower ceiling strips rather than one broad slab. A single wide softbox directly
-        // overhead lights the whole roof and bonnet to the same value, which clipped them to flat
-        // white; splitting it leaves a darker lane between the two reflections so horizontal
-        // panels keep some shape instead of blowing out.
-        // Intensity is per-panel but what reaches the car is roughly area x intensity, so
-        // splitting one wide softbox into two narrower ones needs the intensity raised to
-        // compensate — the first attempt kept it flat and cut the total light by more than half,
-        // leaving the car near-black.
-        panel(4.5, 0.4, 11, -2.8, 6.8, 0, 2.4);
-        panel(4.5, 0.4, 11, 2.8, 6.8, 0, 2.4);
-        panel(0.4, 5, 11, -11.6, 3.2, 0, 0.7);  // left fill
-        panel(0.4, 5, 11, 11.6, 3.2, 0, 0.7);   // right fill
-        panel(9, 4, 0.4, 0, 3.0, -11.6, 0.45);  // back rim light
-        panel(16, 0.4, 16, 0, -6.8, 0, 0.30);   // floor bounce, keeps sills off pure black
-
-        const pmrem = new THREE.PMREMGenerator(renderer);
-        const texture = pmrem.fromScene(env, 0.04).texture;
-        pmrem.dispose();
-        env.traverse((o) => { if (o.isMesh) { o.geometry.dispose(); o.material.dispose(); } });
-        return texture;
+    // Procedural studio environment — ported verbatim from the reference build rather than the
+    // box-room-of-emissive-panels approach this file used before. A canvas gradient standing in
+    // for a sky (dark ceiling, a horizon band, a darker floor) plus a few soft highlight patches
+    // for softbox reflections, mapped equirectangularly and prefiltered through PMREM into a
+    // mipmapped radiance map. This — not the geometry — is most of why the earlier version of
+    // this picker didn't read as the same car: different environment shapes produce a completely
+    // different falloff across the bodywork even with identical geometry and materials.
+    function studioEnv(renderer) {
+        const c = document.createElement('canvas'); c.width = 1024; c.height = 512;
+        const g = c.getContext('2d');
+        const sky = g.createLinearGradient(0, 0, 0, 512);
+        sky.addColorStop(0.00, '#11151d');
+        sky.addColorStop(0.30, '#28313f');
+        sky.addColorStop(0.47, '#5a6a80');
+        sky.addColorStop(0.502, '#090c12');
+        sky.addColorStop(0.72, '#0d1117');
+        sky.addColorStop(1.00, '#04060a');
+        g.fillStyle = sky; g.fillRect(0, 0, 1024, 512);
+        g.filter = 'blur(14px)';
+        g.fillStyle = '#ffffff';
+        g.fillRect(70, 26, 330, 58);      // long overhead softbox -> body-side highlight
+        g.fillRect(548, 18, 360, 50);
+        g.fillStyle = '#d5dfec';
+        g.fillRect(292, 132, 180, 24);
+        g.fillRect(742, 150, 210, 20);
+        g.fillStyle = '#ffb877';           // warm low bounce card
+        g.fillRect(400, 296, 250, 34);
+        g.fillStyle = '#9fc4ec';
+        g.fillRect(20, 300, 180, 30);
+        g.filter = 'none';
+        const tex = new THREE.CanvasTexture(c);
+        tex.mapping = THREE.EquirectangularReflectionMapping;
+        const pm = new THREE.PMREMGenerator(renderer);
+        pm.compileEquirectangularShader();
+        const env = pm.fromEquirectangular(tex).texture;
+        tex.dispose(); pm.dispose();
+        return env;
     }
 
-    // A soft blob under the car, drawn once into a canvas rather than rendered with a shadow map.
-    // A real shadow map would need a light rig, depth passes and bias tuning every frame for one
-    // static soft shadow; this costs one texture and reads the same at this camera distance. It is
-    // what stops the car looking like it is floating.
+    // Real floor + grid rather than a CSS gradient behind a transparent canvas — the reference
+    // scene composites the car over an actual dark studio floor inside WebGL (so reflections,
+    // fog and the contact shadow all agree with each other), not a backdrop painted separately
+    // behind it.
+    function buildGround() {
+        const group = new THREE.Group();
+        const groundMat = new THREE.MeshStandardMaterial({ color: 0x0b0f15, roughness: 0.55, metalness: 0.30 });
+        const floor = new THREE.Mesh(new THREE.CircleGeometry(30, 80), groundMat);
+        floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true;
+        group.add(floor);
+        const grid = new THREE.GridHelper(48, 48, 0x263140, 0x151b24);
+        grid.position.y = 0.002; grid.material.transparent = true; grid.material.opacity = 0.3;
+        group.add(grid);
+        return group;
+    }
+
+    // A soft blob under the car, drawn once into a canvas rather than rendered purely through the
+    // shadow map — the shadow map (enabled below) handles direct occlusion from the key light,
+    // this adds the tight contact darkening right at the tyre contact patches that a single
+    // directional light's shadow tends to leave too faint at this camera distance.
     function buildContactShadow() {
         const size = 256;
         const c = document.createElement('canvas');
         c.width = c.height = size;
         const g = c.getContext('2d');
-        const grad = g.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-        // Weighted so a good portion stays dark before it falls away: with the camera only ~20°
-        // above the horizon the car covers almost all of its own shadow, so only the outer
-        // margin is ever seen. A gentle centre-out fade put all its density where nothing looks.
-        grad.addColorStop(0, 'rgba(0,0,0,0.62)');
-        grad.addColorStop(0.55, 'rgba(0,0,0,0.42)');
-        grad.addColorStop(0.8, 'rgba(0,0,0,0.14)');
+        const grad = g.createRadialGradient(size / 2, size / 2, 8, size / 2, size / 2, 124);
+        grad.addColorStop(0, 'rgba(0,0,0,.80)');
+        grad.addColorStop(0.5, 'rgba(0,0,0,.36)');
         grad.addColorStop(1, 'rgba(0,0,0,0)');
         g.fillStyle = grad;
         g.fillRect(0, 0, size, size);
 
         const mesh = new THREE.Mesh(
-            new THREE.PlaneGeometry(1, 1),
+            new THREE.PlaneGeometry(5.0, 2.05),
             new THREE.MeshBasicMaterial({
                 map: new THREE.CanvasTexture(c),
                 transparent: true,
@@ -120,7 +119,7 @@
             })
         );
         mesh.rotation.x = -Math.PI / 2;
-        mesh.renderOrder = -1;
+        mesh.position.y = 0.005;
         return mesh;
     }
 
@@ -139,9 +138,12 @@
         const loadingEl = root.querySelector('.car-picker-loading');
         const stage3d = root.querySelector('.car-picker-3d');
 
+        // No alpha:true — the reference renders into an opaque canvas and lets scene.background
+        // (below) provide the colour, rather than compositing a transparent canvas over a CSS
+        // backdrop standing in for one.
         let renderer;
         try {
-            renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+            renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
         } catch (e) {
             fallbackTo2D(root);
             return;
@@ -153,13 +155,20 @@
         // would render washed out, with nothing in the console to say why.
         renderer.outputEncoding = THREE.sRGBEncoding;
         renderer.toneMapping = THREE.ACESFilmicToneMapping;
-        renderer.toneMappingExposure = 0.95;
+        renderer.toneMappingExposure = 1.05;
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         // Capped at 2: past that the extra pixels cost real frame time on phones and buy nothing
         // visible on a canvas this size.
         renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 
         const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 100);
+        // Both #070910 (--void), matching the reference exactly: the environment map and the
+        // fog agree on the same colour, so the horizon the environment implies and the fog the
+        // camera actually sees blend into one continuous dark room instead of a visible seam.
+        scene.background = new THREE.Color(0x070910);
+        scene.fog = new THREE.Fog(0x070910, 16, 42);
+        const camera = new THREE.PerspectiveCamera(34, 1, 0.1, 200);
         const partMeshes = {}; // Part name -> mesh
         const originalMaterials = new Map();
         let selectedMesh = null;
@@ -180,14 +189,26 @@
             camera.updateProjectionMatrix();
         }
 
-        // The environment map now does most of the lighting, so these are turned well down from
-        // the flat-shaded values they had before — left in only to keep some directional
-        // definition on the panel creases, which a pure IBL setup renders slightly too evenly.
-        scene.environment = buildEnvironment(renderer);
-        scene.add(new THREE.HemisphereLight(0xffffff, 0xbcbcb4, 0.25));
-        const dir = new THREE.DirectionalLight(0xffffff, 0.35);
-        dir.position.set(5, 8, 6);
-        scene.add(dir);
+        // Environment + a 4-light rig, both ported verbatim from the reference rather than the
+        // single flat hemisphere+directional pair this file used before — that flatter rig is
+        // what made the earlier version of this picker look like a different, less dramatic
+        // render of the same car. The key light is a real shadow-casting light now (paired with
+        // renderer.shadowMap above and castShadow/receiveShadow already set throughout
+        // car-body.js's own mesh construction), not simulated entirely through the environment.
+        scene.environment = studioEnv(renderer);
+        const key = new THREE.DirectionalLight(0xfff2e2, 2.0);
+        key.position.set(4.6, 8.0, 4.6);
+        key.castShadow = true;
+        key.shadow.mapSize.set(2048, 2048);
+        key.shadow.camera.left = -5; key.shadow.camera.right = 5;
+        key.shadow.camera.top = 5; key.shadow.camera.bottom = -5;
+        key.shadow.camera.near = 1; key.shadow.camera.far = 24;
+        key.shadow.bias = -0.0011; key.shadow.normalBias = 0.02;
+        scene.add(key);
+        const fill = new THREE.DirectionalLight(0x92b8e6, 0.5); fill.position.set(-6, 3.2, -5); scene.add(fill);
+        const rim = new THREE.DirectionalLight(0xffb173, 0.85); rim.position.set(-4.2, 2.0, 6.2); scene.add(rim);
+        scene.add(new THREE.HemisphereLight(0x3d4a5b, 0x05070b, 0.40));
+        scene.add(buildGround());
 
         let yaw = 0.6, pitch = 0.35, dist = 6.5;
         // The drag writes to these; the render loop eases the live values toward them, so
@@ -385,14 +406,12 @@
             Object.assign(partMeshes, built.partMeshes);
             scene.add(modelRoot);
 
-            // Sized from the model's own bounds so it stays correct if the mesh is ever swapped.
+            // buildContactShadow()'s plane is a fixed real-world size (5.0 x 2.05, matching the
+            // reference exactly) rather than scaled from the model's bounds — car-body.js's
+            // geometry is in the same real-world metres the reference itself used, centred at the
+            // same origin, so no rescaling is needed for the two to already agree.
             const bounds = new THREE.Box3().setFromObject(modelRoot);
-            const extent = bounds.getSize(new THREE.Vector3());
-            const middle = bounds.getCenter(new THREE.Vector3());
-            const contact = buildContactShadow();
-            contact.scale.set(extent.x * 1.9, extent.z * 2.4, 1); // plane is rotated flat: local Y maps to world Z
-            contact.position.set(middle.x, bounds.min.y + 0.01, middle.z);
-            scene.add(contact);
+            scene.add(buildContactShadow());
 
             frameModel(bounds);
 

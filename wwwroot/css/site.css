@@ -317,15 +317,15 @@ body {
 .photo-part { position: absolute; left: 6px; bottom: 6px; right: 40px; background: rgba(78,134,199,0.85); color: #fff; font-family: var(--f-mono); font-size: 0.6rem; padding: 2px 6px; border-radius: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .photo-tile.part-hidden { display: none; }
 
-/* NOTE on this whole block: .car-stage, .car-picker-canvas-wrap and .damage-mark-canvas-wrap are
-   deliberately LEFT LIGHT here, not overlooked. car3d.js's environment lighting is tuned against
-   a light backdrop (its studio-sweep gradient and contact shadow both assume a light floor to
-   read against), and the SVG car's own fill colours were chosen to sit on light paper. Changing
-   either without the other would make the car unreadable. That whole surface — SVG artwork,
-   canvas backdrop, and car3d.js's lighting together — is the dedicated follow-up pass, not this
-   blanket theme swap. What's fixed here is only what would otherwise look visibly broken against
-   the new dark page: nav buttons and text sitting directly on --void, and the selection-state
-   colours (hover/selected/covered), which are simple semantic swaps independent of the backdrop. */
+/* NOTE on this block: the 3D picker's own backdrop (.car-picker-canvas-wrap, below) went dark
+   once car3d.js's lighting was rebuilt to match the reference scene exactly (real fog, floor and
+   grid painted in WebGL rather than a CSS gradient standing in for one). .car-stage and
+   .damage-mark-canvas-wrap are LEFT LIGHT here deliberately, not overlooked: the 2D SVG car's own
+   fill colours were chosen to sit on light paper, and .damage-mark-canvas-wrap displays real
+   uploaded photos, which need a neutral light surround to read correctly regardless of theme.
+   What's fixed here is only what would otherwise look visibly broken against the dark page: nav
+   buttons and text sitting directly on --void, and the selection-state colours (hover/selected/
+   covered), which are simple semantic swaps independent of the backdrop. */
 .car-diagram { max-width: 560px; }
 .car-diagram-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
 .car-view-name { font-weight: 600; font-size: 0.95rem; }
@@ -363,20 +363,19 @@ body {
 .cp-btn.covered { background: #5DCAA5; border-color: #0F6E56; color: #04342C; }
 
 .car-picker { max-width: 480px; }
-/* A studio sweep rather than a flat fill: bright just behind and above the car, falling off to
-   the corners. The canvas itself is transparent, so this backdrop is what the car is composited
-   over — a single flat colour is what made it read as pasted onto a swatch. Left light per the
-   note above this block; car3d.js's lighting is tuned against it. */
+/* No CSS backdrop any more: the reference scene paints its own environment (scene.background +
+   fog, both #070910) directly in WebGL, matching how it looks in the source file exactly, rather
+   than compositing a transparent canvas over a CSS gradient standing in for a studio floor. */
 .car-picker-canvas-wrap {
     position: relative;
-    background: radial-gradient(ellipse 130% 90% at 50% 22%, #ffffff 0%, #f0eee8 42%, #d9d6cd 100%);
+    background: #070910;
     border: 1px solid var(--line-2);
     border-radius: 8px;
     overflow: hidden;
 }
 .car-picker-canvas { display: block; width: 100%; touch-action: none; cursor: grab; }
 .car-picker-canvas:active { cursor: grabbing; }
-.car-picker-loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; color: #888; background: #f4f3ee; }
+.car-picker-loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; color: var(--muted); background: #070910; }
 .car-picker-hint { margin-top: 4px; color: var(--muted); }
 
 /* filter() rather than a hardcoded darker colour so this works on any .btn-* variant without

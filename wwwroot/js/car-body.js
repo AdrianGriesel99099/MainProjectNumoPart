@@ -351,12 +351,16 @@
         return t;
     }
 
+    // Alpine Silver — PAINTS[0] in the reference's own paint-swatch list (six colours; this app
+    // has no paint-swatch UI yet, so the default is what's used, verbatim).
+    const PAINT_DEFAULT = { hex: 0xB9BEC4, metal: 0.86, rough: 0.20 };
+
     function buildMaterials() {
         const M = {
-            paint: new THREE.MeshPhysicalMaterial({ color: 0x9aa4b1, metalness: .62, roughness: .24, clearcoat: 1, clearcoatRoughness: .06, envMapIntensity: 1.2 }),
+            paint: new THREE.MeshPhysicalMaterial({ color: PAINT_DEFAULT.hex, metalness: PAINT_DEFAULT.metal, roughness: PAINT_DEFAULT.rough, clearcoat: 1, clearcoatRoughness: .05, envMapIntensity: 1.5 }),
             glass: new THREE.MeshPhysicalMaterial({ color: 0x121a22, metalness: .12, roughness: .045, transparent: true, opacity: .44, envMapIntensity: 2.6, side: THREE.DoubleSide, depthWrite: false }),
             glassD: new THREE.MeshPhysicalMaterial({ color: 0x0b1016, metalness: .12, roughness: .05, transparent: true, opacity: .55, envMapIntensity: 2.3, side: THREE.DoubleSide, depthWrite: false }),
-            shell: new THREE.MeshStandardMaterial({ color: 0x14171d, metalness: .3, roughness: .85, side: THREE.DoubleSide }),
+            shell: new THREE.MeshStandardMaterial({ color: 0x0d1015, metalness: .3, roughness: .85, side: THREE.DoubleSide }),
             black: new THREE.MeshStandardMaterial({ color: 0x0b0d11, metalness: .25, roughness: .68 }),
             rubber: new THREE.MeshStandardMaterial({ color: 0x0a0c0f, metalness: .02, roughness: .95 }),
             trim: new THREE.MeshStandardMaterial({ color: 0x13161c, metalness: .4, roughness: .55 }),
@@ -372,8 +376,16 @@
             reflect: new THREE.MeshStandardMaterial({ color: 0xcdd6e2, metalness: 1, roughness: .16, envMapIntensity: 1.9 }),
             bulb: new THREE.MeshStandardMaterial({ color: 0x0d0f13, emissive: 0xfff0d8, emissiveIntensity: .08, roughness: .3 }),
             carpet: new THREE.MeshStandardMaterial({ color: 0x14161b, metalness: .02, roughness: .97 }),
+            leather: new THREE.MeshStandardMaterial({ color: 0x1b1d22, metalness: .04, roughness: .86 }),
+            steel: new THREE.MeshStandardMaterial({ color: 0x4b525c, metalness: .9, roughness: .4 }),
             liner: new THREE.MeshStandardMaterial({ color: 0x0b0d10, metalness: .05, roughness: .98, side: THREE.DoubleSide }),
-            slide: new THREE.MeshStandardMaterial({ color: 0x23272e, metalness: .55, roughness: .5 })
+            slide: new THREE.MeshStandardMaterial({ color: 0x23272e, metalness: .55, roughness: .5 }),
+            // Blueprint/isolate-mode materials — not wired to any toggle yet (that's the picker's
+            // UI chrome, not this geometry pass), but kept 1:1 with the reference's own material
+            // set rather than omitted.
+            ghost: new THREE.MeshStandardMaterial({ color: 0x161b23, metalness: .15, roughness: .9, envMapIntensity: .25 }),
+            ghostG: new THREE.MeshStandardMaterial({ color: 0x10151c, metalness: .15, roughness: .75, transparent: true, opacity: .55, envMapIntensity: .4 }),
+            bluep: new THREE.MeshStandardMaterial({ color: 0x0c1826, metalness: .1, roughness: .9, envMapIntensity: .1 })
         };
         M.tyre = new THREE.MeshStandardMaterial({ color: 0x14171b, metalness: .03, roughness: .92, map: mkTread() });
         M.mesh = new THREE.MeshStandardMaterial({ color: 0x0a0c10, metalness: .6, roughness: .5, map: mkMesh() });
