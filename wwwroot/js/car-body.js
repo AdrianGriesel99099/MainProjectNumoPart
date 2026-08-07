@@ -9,11 +9,11 @@
 // the documented fixes) and re-deriving them from scratch would just reproduce the same bugs.
 //
 // window.CarBody.build() returns { group, partMeshes, dispose }. partMeshes is keyed by exact
-// Part enum member names (Models/Part.cs) for every panel this system can tag/damage-mark; the
-// panels the reference models that we have no Part for (A/B/C-pillars, drip rails, handles,
-// mirrors as separate trim, wipers, plates, exhaust, antenna, fuel filler) are still built for
-// visual completeness but flagged userData.noPick so they render without being selectable —
-// the same pattern the reference itself uses for its own liner backing, belt seal and frit.
+// Part enum member names (Models/Part.cs) for every one of the 72 panels the reference itself
+// treats as a real, individually clickable part — matching it exactly, not just the smaller set
+// this app originally tracked. Only pure scenery the reference ALSO never made clickable (the
+// body shell, cabin tub, wheel-house liner backing, beltline seal, glass frit) stays flagged
+// userData.noPick, the same as it does there.
 (function (global) {
     'use strict';
 
@@ -415,8 +415,7 @@
             bp({ x0: 1.860, x1: 1.246, t0: -0.415, t1: 0.415, dx: 0.034, dt: 0.018, mat: M.paint })
         ];
 
-        const cowl = bp({ x0: 1.239, x1: 1.106, t0: -0.415, t1: 0.415, dx: 0.020, dt: 0.018, mat: M.black });
-        cowl.userData.noPick = true; car.add(cowl);
+        B.CowlPanel = [bp({ x0: 1.239, x1: 1.106, t0: -0.415, t1: 0.415, dx: 0.020, dt: 0.018, mat: M.black })];
 
         const wings = bpPair({ x0: 1.847, x1: 1.026, t0: wingT0, t1: wingT1, dx: 0.026, dt: 0.020, mat: M.paint });
         B.WingFrontRight = [wings[0]];
@@ -474,39 +473,40 @@
         B.Windscreen = [gp({ x0: WS_X0, x1: WS_X1, t0: f => -uWi(f) - 0.02, t1: f => uWi(f) + 0.02, dx: 0.026, dt: 0.016, off: -0.004, mat: M.glass, shadow: false })];
 
         const pillA = gpPair({ x0: WS_X0, x1: WS_X1, t0: uWi, t1: uPo, dx: 0.024, dt: 0.012, off: 0.004, mat: M.paint });
-        const aR = pillA[0], aL = pillA[1]; aR.userData.noPick = true; aL.userData.noPick = true;
-        car.add(aR, aL);
+        B.PillarARight = [pillA[0]];
+        B.PillarALeft = [pillA[1]];
 
         B.Roof = [gp({ x0: WS_X1, x1: RF_X1, t0: f => -EDGE_IN(WS_X1 + (RF_X1 - WS_X1) * f) - 0.01, t1: f => EDGE_IN(WS_X1 + (RF_X1 - WS_X1) * f) + 0.01, dx: 0.030, dt: 0.020, off: 0.004, mat: M.paint })];
 
         const rails = gpPair({ x0: WS_X1, x1: -1.030, t0: edgeIn(WS_X1, -1.030), t1: edgeOut(WS_X1, -1.030), dx: 0.030, dt: 0.010, off: 0.006, mat: M.trim });
-        rails.forEach(m => { m.userData.noPick = true; car.add(m); });
+        B.DripRailRight = [rails[0]];
+        B.DripRailLeft = [rails[1]];
 
         const doB1 = { x0: WS_X0, x1: WS_X1 }, doB2 = { x0: WS_X1, x1: 0.042 };
-        const dglass = [
+        B.DoorGlassFrontRight = [
             gp({ x0: doB1.x0, x1: doB1.x1, t0: f => edgeOut(doB1.x0, doB1.x1)(f) - 0.02, t1: 1.0, dx: 0.026, dt: 0.014, off: -0.004, mat: M.glassD, shadow: false }),
             gp({ x0: doB2.x0, x1: doB2.x1, t0: f => edgeOut(doB2.x0, doB2.x1)(f) - 0.02, t1: 1.0, dx: 0.030, dt: 0.014, off: -0.004, mat: M.glassD, shadow: false })
         ];
-        const dglassL = [
+        B.DoorGlassFrontLeft = [
             gp({ x0: doB1.x0, x1: doB1.x1, t0: f => -edgeOut(doB1.x0, doB1.x1)(f) + 0.02, t1: -1.0, dx: 0.026, dt: 0.014, off: -0.004, mat: M.glassD, shadow: false }),
             gp({ x0: doB2.x0, x1: doB2.x1, t0: f => -edgeOut(doB2.x0, doB2.x1)(f) + 0.02, t1: -1.0, dx: 0.030, dt: 0.014, off: -0.004, mat: M.glassD, shadow: false })
         ];
-        // No DoorGlass part exists in Part.cs (the door itself is the tagged/damage-marked
-        // panel) — kept as visible, non-clickable glazing for a complete-looking car, same
-        // treatment as the reference's own non-pickable trim.
-        [...dglass, ...dglassL].forEach(m => { m.userData.noPick = true; car.add(m); });
 
         const rgl = gpPair({ x0: -0.016, x1: -0.874, t0: f => edgeOut(-0.016, -0.874)(f) - 0.02, t1: 1.0, dx: 0.028, dt: 0.014, off: -0.004, mat: M.glassD, shadow: false });
-        rgl.forEach(m => { m.userData.noPick = true; car.add(m); });
+        B.DoorGlassRearRight = [rgl[0]];
+        B.DoorGlassRearLeft = [rgl[1]];
 
         const bpill = gpPair({ x0: 0.042, x1: -0.016, t0: edgeIn(0.042, -0.016), t1: 1.0, dx: 0.014, dt: 0.014, off: 0.005, mat: M.black });
-        bpill.forEach(m => { m.userData.noPick = true; car.add(m); });
+        B.PillarBRight = [bpill[0]];
+        B.PillarBLeft = [bpill[1]];
 
         const qglass = gpPair({ x0: -0.880, x1: -1.030, t0: f => edgeOut(-0.880, -1.030)(f) - 0.02, t1: 1.0, dx: 0.022, dt: 0.014, off: -0.004, mat: M.glassD, shadow: false });
-        qglass.forEach(m => { m.userData.noPick = true; car.add(m); });
+        B.QuarterGlassRight = [qglass[0]];
+        B.QuarterGlassLeft = [qglass[1]];
 
         const cpill = gpPair({ x0: -1.030, x1: BL_X1, t0: edgeIn(-1.030, BL_X1), t1: 1.0, dx: 0.026, dt: 0.016, off: 0.004, mat: M.paint });
-        cpill.forEach(m => { m.userData.noPick = true; car.add(m); });
+        B.PillarCRight = [cpill[0]];
+        B.PillarCLeft = [cpill[1]];
 
         B.RearWindscreen = [gp({ x0: RF_X1, x1: BL_X1, t0: f => -edgeIn(RF_X1, BL_X1)(f) - 0.02, t1: f => edgeIn(RF_X1, BL_X1)(f) + 0.02, dx: 0.026, dt: 0.016, off: -0.004, mat: M.glass, shadow: false })];
 
@@ -646,10 +646,10 @@
 
         // Centre garnish and rear valance/diffuser have no Part.cs equivalent — visual
         // completeness only, same treatment as the reference's own non-pickable trim.
-        const garnish = new THREE.Group();
-        garnish.add(facePlate(-2.350, 0.700, 0, 0.170, 0.230, 0.024, M.black));
-        garnish.add(faceFrame(-2.354, 0.700, 0, 0.170, 0.230, 0.026, 0.012, M.trim));
-        garnish.userData.noPick = true; car.add(garnish);
+        B.CentreGarnish = [
+            facePlate(-2.350, 0.700, 0, 0.170, 0.230, 0.024, M.black),
+            faceFrame(-2.354, 0.700, 0, 0.170, 0.230, 0.026, 0.012, M.trim)
+        ];
 
         B.FrontSpoiler = [
             bp({
@@ -671,10 +671,10 @@
             })
         ];
 
-        const diffuser = new THREE.Group();
-        diffuser.add(bp({ x0: -2.346, x1: -2.210, t0: 0.780, t1: 1.220, dx: 0.020, dt: 0.020, off: -0.020, mat: M.black }));
-        bezel(-2.346, -2.210, 0.780, 1.220, M.trim, 0.003).forEach(m => diffuser.add(m));
-        diffuser.userData.noPick = true; car.add(diffuser);
+        B.RearValance = [
+            bp({ x0: -2.346, x1: -2.210, t0: 0.780, t1: 1.220, dx: 0.020, dt: 0.020, off: -0.020, mat: M.black }),
+            ...bezel(-2.346, -2.210, 0.780, 1.220, M.trim, 0.003)
+        ];
 
         // ---------- wheels & brakes ----------
         function makeWheel() {
@@ -793,9 +793,10 @@
             bar.position.z = 0.012; g.add(bar);
             return place(g, hx, sgn * 0.470, 0.010);
         }
-        const handles = new THREE.Group();
-        [handle(1, 0.190), handle(-1, 0.190), handle(1, -0.710), handle(-1, -0.710)].forEach(h => handles.add(h));
-        handles.userData.noPick = true; car.add(handles);
+        B.DoorHandleFrontRight = [handle(1, 0.190)];
+        B.DoorHandleFrontLeft = [handle(-1, 0.190)];
+        B.DoorHandleRearRight = [handle(1, -0.710)];
+        B.DoorHandleRearLeft = [handle(-1, -0.710)];
 
         function repeater(sgn) {
             const g = new THREE.Group();
@@ -803,9 +804,8 @@
             l.scale.set(1, 0.62, 0.42); g.add(l);
             return place(g, 1.060, sgn * 0.520, 0.004);
         }
-        const repeaters = new THREE.Group();
-        [repeater(1), repeater(-1)].forEach(r => repeaters.add(r));
-        repeaters.userData.noPick = true; car.add(repeaters);
+        B.SideRepeaterRight = [repeater(1)];
+        B.SideRepeaterLeft = [repeater(-1)];
 
         function wiper(zc, len, ang) {
             const g = new THREE.Group();
@@ -819,9 +819,9 @@
             const holder = new THREE.Group(); holder.add(g);
             return place(holder, 1.160, zc, 0.012);
         }
-        const wipers = new THREE.Group();
-        [wiper(0.34, 0.52, 0.34), wiper(-0.12, 0.50, 0.30)].forEach(w => wipers.add(w));
-        wipers.userData.noPick = true; car.add(wipers);
+        // One part covering both blades, same as the reference's own single 'Wipers' entry —
+        // there is no honest way to tag "just the passenger-side wiper" on a real photo either.
+        B.Wipers = [wiper(0.34, 0.52, 0.34), wiper(-0.12, 0.50, 0.30)];
 
         function plate(x, y, txt, face) {
             const g = new THREE.Group();
@@ -835,12 +835,10 @@
             g.position.set(x, y, 0);
             return g;
         }
-        const plates = new THREE.Group();
-        plates.add(plate(2.360, 0.530, 'CA 4560', 1));
-        plates.add(plate(-2.360, 0.490, 'CA 4560', -1));
-        plates.userData.noPick = true; car.add(plates);
+        B.FrontPlate = [plate(2.360, 0.530, 'CA 4560', 1)];
+        B.RearPlate = [plate(-2.360, 0.490, 'CA 4560', -1)];
 
-        const exh = new THREE.Group();
+        const exhMeshes = [];
         [-0.300, -0.432].forEach(z => {
             const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.041, 0.041, 0.20, 20), M.chromeD);
             pipe.position.set(-2.16, 0.288, z); pipe.rotation.z = Math.PI / 2;
@@ -848,21 +846,23 @@
             tip.position.set(-2.248, 0.288, z); tip.rotation.z = Math.PI / 2;
             const bore = new THREE.Mesh(new THREE.CylinderGeometry(0.038, 0.038, 0.03, 20), M.black);
             bore.position.set(-2.264, 0.288, z); bore.rotation.z = Math.PI / 2;
-            [pipe, tip, bore].forEach(m => { m.castShadow = true; exh.add(m); });
+            [pipe, tip, bore].forEach(m => { m.castShadow = true; exhMeshes.push(m); });
         });
-        exh.userData.noPick = true; car.add(exh);
+        B.ExhaustTips = exhMeshes;
 
-        const ant = new THREE.Group();
+        const antMeshes = [];
         (function () {
             const base = pointAt(-1.180, 0.760, new THREE.Vector3());
             const n = normalAt(-1.180, 0.760, new THREE.Vector3());
+            const ant = new THREE.Group();
             const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.015, 0.026, 12), M.black);
             foot.position.set(0, 0.010, 0); foot.rotation.z = -0.30; ant.add(foot);
             const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.0035, 0.0055, 0.335, 10), M.chromeD);
             mast.position.set(0.048, 0.175, 0); mast.rotation.z = -0.30; ant.add(mast);
             ant.position.copy(base).addScaledVector(n, 0.006);
+            antMeshes.push(ant);
         })();
-        ant.userData.noPick = true; car.add(ant);
+        B.Antenna = antMeshes;
 
         const fuel = new THREE.Group();
         const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.008, 26), M.paint);
@@ -870,7 +870,7 @@
         const ring = new THREE.Mesh(new THREE.TorusGeometry(0.076, 0.004, 8, 26), M.black);
         fuel.add(ring);
         place(fuel, -1.680, -0.505, 0.006);
-        fuel.userData.noPick = true; car.add(fuel);
+        B.FuelFiller = [fuel];
     }
 
     function build() {

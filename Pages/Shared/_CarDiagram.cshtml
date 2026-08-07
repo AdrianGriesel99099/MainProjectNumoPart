@@ -232,16 +232,31 @@
         </svg>
     </div>
 
-    @* These twelve have no honest position on a drawing of the car's outside, so they are plain
-       buttons rather than invented hotspots that would be harder to find. Fenderliners (inside
-       the wheel arch) and bumper slides (mounting brackets behind the bumper cover) joined the
-       original six for the same reason. *@
+    @* These have no honest position on a FLAT drawing of the car's outside, so they are plain
+       buttons rather than invented hotspots that would be harder to find than just reading a
+       label. Fenderliners (inside the wheel arch) and bumper slides (mounting brackets behind the
+       bumper cover) joined the original six for the same reason.
+       The 29 parts below that (pillars, drip rails, both door-glass panes, handles, repeaters,
+       wipers, plates, exhaust, antenna, fuel filler, garnish, valance) are real, individually
+       clickable panels in the 3D picker — car-body.js was extended to match the reference build's
+       full 72-part set exactly, not just the smaller set this app originally tracked — but drawing
+       precise 2D hotspot regions for all 29 (several of which, like the two door-glass panes or
+       the A/B/C-pillars, sit only millimetres apart on the side view) is real, separate SVG-authoring
+       work on the same order as the original blueprint redraw, not something to fold into wiring up
+       reachability. Every one of them is still selectable here — just as a button, not a shape. *@
     <div class="car-extras">
         @foreach (var part in new[] {
             Part.Interior, Part.EngineBay, Part.LoadArea, Part.Odometer, Part.Undercarriage, Part.Other,
             Part.FenderlinerFrontLeft, Part.FenderlinerFrontRight,
             Part.BumperSlideFrontLeft, Part.BumperSlideFrontRight,
-            Part.BumperSlideRearLeft, Part.BumperSlideRearRight
+            Part.BumperSlideRearLeft, Part.BumperSlideRearRight,
+            Part.CowlPanel, Part.PillarALeft, Part.PillarARight, Part.PillarBLeft, Part.PillarBRight,
+            Part.PillarCLeft, Part.PillarCRight, Part.DripRailLeft, Part.DripRailRight,
+            Part.DoorGlassFrontLeft, Part.DoorGlassFrontRight, Part.DoorGlassRearLeft, Part.DoorGlassRearRight,
+            Part.QuarterGlassLeft, Part.QuarterGlassRight, Part.CentreGarnish, Part.RearValance,
+            Part.DoorHandleFrontLeft, Part.DoorHandleFrontRight, Part.DoorHandleRearLeft, Part.DoorHandleRearRight,
+            Part.SideRepeaterLeft, Part.SideRepeaterRight, Part.Wipers, Part.FrontPlate, Part.RearPlate,
+            Part.ExhaustTips, Part.Antenna, Part.FuelFiller
         })
         {
             <button type="button" class="btn btn-sm btn-outline-secondary cp-btn" data-part="@part">@Html.DisplayFor(_ => part)</button>

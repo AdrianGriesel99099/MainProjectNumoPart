@@ -76,6 +76,39 @@ namespace MainProjectNumoPart.Models
         [Display(Name = "Left front bumper slide")] BumperSlideFrontLeft = 46,
         [Display(Name = "Right front bumper slide")] BumperSlideFrontRight = 47,
         [Display(Name = "Left rear bumper slide")] BumperSlideRearLeft = 48,
-        [Display(Name = "Right rear bumper slide")] BumperSlideRearRight = 49
+        [Display(Name = "Right rear bumper slide")] BumperSlideRearRight = 49,
+
+        // The 3D reference build this picker's geometry was ported from treats these as real,
+        // individually clickable/inspectable parts, not decoration — the earlier port had them
+        // visible in 3D but not selectable here. Added as their own parts to match.
+        [Display(Name = "Cowl panel")] CowlPanel = 50,
+        [Display(Name = "Left A-pillar")] PillarALeft = 51,
+        [Display(Name = "Right A-pillar")] PillarARight = 52,
+        [Display(Name = "Left B-pillar")] PillarBLeft = 53,
+        [Display(Name = "Right B-pillar")] PillarBRight = 54,
+        [Display(Name = "Left C-pillar")] PillarCLeft = 55,
+        [Display(Name = "Right C-pillar")] PillarCRight = 56,
+        [Display(Name = "Left drip rail")] DripRailLeft = 57,
+        [Display(Name = "Right drip rail")] DripRailRight = 58,
+        [Display(Name = "Front left door glass")] DoorGlassFrontLeft = 59,
+        [Display(Name = "Front right door glass")] DoorGlassFrontRight = 60,
+        [Display(Name = "Rear left door glass")] DoorGlassRearLeft = 61,
+        [Display(Name = "Rear right door glass")] DoorGlassRearRight = 62,
+        [Display(Name = "Left quarter glass")] QuarterGlassLeft = 63,
+        [Display(Name = "Right quarter glass")] QuarterGlassRight = 64,
+        [Display(Name = "Centre garnish")] CentreGarnish = 65,
+        [Display(Name = "Rear valance")] RearValance = 66,
+        [Display(Name = "Front left door handle")] DoorHandleFrontLeft = 67,
+        [Display(Name = "Front right door handle")] DoorHandleFrontRight = 68,
+        [Display(Name = "Rear left door handle")] DoorHandleRearLeft = 69,
+        [Display(Name = "Rear right door handle")] DoorHandleRearRight = 70,
+        [Display(Name = "Left side repeater")] SideRepeaterLeft = 71,
+        [Display(Name = "Right side repeater")] SideRepeaterRight = 72,
+        [Display(Name = "Wipers")] Wipers = 73,
+        [Display(Name = "Front number plate")] FrontPlate = 74,
+        [Display(Name = "Rear number plate")] RearPlate = 75,
+        [Display(Name = "Exhaust tips")] ExhaustTips = 76,
+        [Display(Name = "Antenna")] Antenna = 77,
+        [Display(Name = "Fuel filler")] FuelFiller = 78
     }
 }
