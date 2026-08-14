@@ -149,6 +149,36 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+// Response hardening headers the framework does NOT set on its own. Verified against the running
+// production site before adding these: HSTS (UseHsts above) and X-Frame-Options: SAMEORIGIN were
+// already present as framework defaults, so they are deliberately not re-set here — these two are
+// the ones that were genuinely missing.
+//
+// Placed before UseStaticFiles so it covers static assets too, not just Razor responses.
+//
+// X-Content-Type-Options stops content sniffing. It matters specifically because uploads are
+// user-supplied files: Upload.cshtml.cs checks the multipart Content-Type header, which the
+// client controls and can trivially lie about. (The real protection is that ThumbnailGenerator
+// decodes every upload through ImageSharp, so a non-image fails before it is ever stored — but a
+// header that costs nothing is worth having behind that.)
+//
+// Referrer-Policy keeps VINs and registration numbers out of the Referer header on outbound
+// navigations. Vehicle URLs are /Vehicles/Details/{id} so they carry no PII directly, but photo
+// SAS URLs are redirected to on a different host, and same-origin-only is the safer default.
+//
+// NOT added here: a Content-Security-Policy. Doing that properly is a real piece of work rather
+// than a one-liner — the vehicle page emits inline <script> blocks (window.__damageMarksData and
+// friends) and the layout pulls Google Fonts, so a meaningful policy needs per-request nonces
+// threaded through those views. A blanket 'unsafe-inline' policy would look like protection while
+// permitting exactly the injection CSP exists to stop, so it is left for a dedicated change.
+app.Use(async (context, next) =>
+{
+    context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+    context.Response.Headers["Referrer-Policy"] = "same-origin";
+    await next();
+});
+
 app.UseStaticFiles();
 
 app.UseRouting();

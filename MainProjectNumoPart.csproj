@@ -37,4 +37,28 @@
     <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
   </ItemGroup>
 
+  <!-- SECURITY PINS for vulnerable TRANSITIVE dependencies.
+       Neither package is referenced directly by this project; both arrive underneath the Azure
+       Data Protection and EF Core SQLite packages above, at versions carrying published High
+       advisories (re-check with: dotnet list package, passing the vulnerable + include-transitive
+       flags).
+       NuGet resolves a transitive to the *highest* version demanded across the graph, so naming
+       them explicitly here is the supported way to float them up to a patched build without
+       forking or upgrading the parents — the parents accept these versions, so nothing else moves.
+
+       - System.Security.Cryptography.Xml: 8.0.2 -> 8.0.4. This one is genuinely reachable in
+         production: the Data Protection key ring is XML, persisted to blob storage and encrypted
+         with a Key Vault key (see Program.cs), so this code path runs on every cold start.
+       - SQLitePCLRaw.lib.e_sqlite3: -> 2.1.13. SQLite is Development-only (Program.cs picks
+         SqlServer outside Development), so this is not reachable in production — but the native
+         library still ships inside the container image, so it is patched rather than argued about.
+
+       Both are deliberately kept in the 8.0.x / 2.1.x lines to stay in-band with net8.0 rather
+       than pulling 9.x runtime libraries into an 8.0 app. Revisit when the parents ship their own
+       patched ranges, at which point these two lines can simply be deleted. -->
+  <ItemGroup>
+    <PackageReference Include="System.Security.Cryptography.Xml" Version="8.0.4" />
+    <PackageReference Include="SQLitePCLRaw.lib.e_sqlite3" Version="2.1.13" />
+  </ItemGroup>
+
 </Project>

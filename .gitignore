@@ -8,3 +8,8 @@ obj/
 app.db
 app.db-shm
 app.db-wal
+
+# Claude Code working directory. Untracked already, but explicitly ignored because it holds full
+# git worktree copies of this repo — a single `git add -A` would otherwise commit a duplicate
+# source tree (and any scratch files in it) into a repo whose history is public.
+.claude/
