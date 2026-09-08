@@ -1,0 +1,90 @@
+name: Rollback deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_sha:
+        description: >
+          Commit SHA to roll back to. Leave empty to roll back to the last commit that existed
+          before today (UTC) -- undoes everything committed today without needing to look up a
+          SHA first.
+        required: false
+        default: ''
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  RESOURCE_GROUP: rg-workshop-photos-prod
+  CONTAINER_APP: ca-workshop-photos-prod
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Required for OIDC: lets the runner mint the short-lived token that azure/login
+      # exchanges for an Azure access token.
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history -- needed to compute "last commit before today"
+
+      # This is a MANUAL, human-triggered workflow only (workflow_dispatch, no schedule/push
+      # trigger) -- rolling back is a deliberate action someone takes, the same principle
+      # docs/OPERATIONS.md documents for restoring a backed-up photo, not something that should
+      # ever fire on its own.
+      - name: Resolve target commit
+        id: resolve
+        run: |
+          if [ -n "${{ inputs.target_sha }}" ]; then
+            TARGET="${{ inputs.target_sha }}"
+            if ! git cat-file -e "$TARGET" 2>/dev/null; then
+              echo "::error::'$TARGET' is not a commit in this repository's history."
+              exit 1
+            fi
+          else
+            TARGET=$(git log --before="$(date -u +%Y-%m-%d)T00:00:00Z" -1 --format=%H)
+            if [ -z "$TARGET" ]; then
+              echo "::error::No commit found before today (UTC) -- nothing to roll back to automatically. Pass target_sha explicitly to go back further."
+              exit 1
+            fi
+          fi
+          echo "target=$TARGET" >> "$GITHUB_OUTPUT"
+          echo "### Rolling back to" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          git log -1 --format='%H%n%ci%n%s' "$TARGET" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Lowercase image name
+        id: image
+        run: echo "name=$(echo '${{ env.IMAGE_NAME }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+
+      # Federated (OIDC) auth, same App Registration docker-build.yml uses to deploy -- rolling
+      # back is the same operation (point the Container App at a different already-built image),
+      # not a different privilege, so it deliberately reuses that identity rather than minting a
+      # new one.
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # Relies on the target commit's image still existing in GHCR. Every successful push to
+      # master builds and pushes an image tagged with that exact commit SHA (see
+      # docker-build.yml), so this holds for any commit that ever deployed successfully -- unless
+      # something has since deleted that package version. There is no cleanup job in this repo
+      # that would do that, but GHCR is an external service this repo doesn't fully control (see
+      # the 2026-09-08 outage where the registry's own state changed independently of anything
+      # in this codebase) -- worth knowing if this step ever fails with "manifest unknown".
+      - name: Deploy the older image
+        run: |
+          az containerapp update \
+            --name "$CONTAINER_APP" \
+            --resource-group "$RESOURCE_GROUP" \
+            --image "${{ env.REGISTRY }}/${{ steps.image.outputs.name }}:${{ steps.resolve.outputs.target }}" \
+            --output none
+          echo "Rolled back to ${{ steps.resolve.outputs.target }}"
+          echo "**Deployed.**" >> "$GITHUB_STEP_SUMMARY"
