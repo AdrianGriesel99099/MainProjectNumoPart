@@ -1,0 +1,66 @@
+name: Daily photo backup
+
+on:
+  schedule:
+    # 02:00 UTC = 04:00 SAST (South Africa has no DST), well outside any realistic upload window.
+    - cron: '0 2 * * *'
+  workflow_dispatch: {}
+
+env:
+  PROD_STORAGE_ACCOUNT: stworkshopphotosprod
+  BACKUP_STORAGE_ACCOUNT: stworkshopphotosbkup
+  CONTAINER: originals
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Required for OIDC: lets the runner mint the short-lived token that azure/login
+      # exchanges for an Azure access token. Without it the login step fails with a
+      # missing-token error rather than an auth error, which is a confusing way to find out.
+      id-token: write
+    steps:
+      # Deliberately a SEPARATE App Registration (github-backup-workshop-photos) from the one
+      # docker-build.yml uses to deploy. This one holds exactly two role assignments, both
+      # container-scoped rather than account-scoped: Storage Blob Data Reader on prod's
+      # `originals` container, and Storage Blob Data Contributor on the backup account's
+      # `originals` container. No Container App access, no access to the thumbnails container
+      # in either account. A problem with this workflow's credentials can't touch deploy or the
+      # running app, and vice versa a problem with the deploy credential can't touch photo data.
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_BACKUP_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # ubuntu-latest ships the Azure CLI but not AzCopy — installed from Microsoft's own
+      # documented download link rather than a third-party marketplace action, so there is no
+      # extra action/SHA to trust beyond what's already in this file.
+      - name: Install AzCopy
+        run: |
+          curl -sL https://aka.ms/downloadazcopy-v10-linux -o azcopy.tar.gz
+          tar -xzf azcopy.tar.gz --strip-components=1 --wildcards '*/azcopy'
+          sudo mv azcopy /usr/local/bin/azcopy
+          azcopy --version
+
+      # AZCOPY_AUTO_LOGIN_TYPE=AZCLI makes azcopy reuse the Azure CLI session azure/login just
+      # established (via OIDC, no stored secret) rather than needing its own separate credential.
+      #
+      # NO --delete-destination flag here, and it must never be added: the entire point of this
+      # backup is that a photo deleted from production — by mistake, by a bug, or by someone with
+      # delete access acting in bad faith — stays recoverable in the backup account regardless.
+      # `azcopy sync` defaults --delete-destination to false, so this step only ever ADDS
+      # new/changed blobs to the backup; it can never remove anything already there. If a restore
+      # is ever needed, `azcopy copy` (or the Portal) in the opposite direction copies a blob back
+      # from the backup account to production — there is no automation for that direction, on
+      # purpose, since a restore should be a deliberate action someone takes, not a scheduled one.
+      - name: Sync originals to backup storage account
+        env:
+          AZCOPY_AUTO_LOGIN_TYPE: AZCLI
+        run: |
+          azcopy sync \
+            "https://${{ env.PROD_STORAGE_ACCOUNT }}.blob.core.windows.net/${{ env.CONTAINER }}" \
+            "https://${{ env.BACKUP_STORAGE_ACCOUNT }}.blob.core.windows.net/${{ env.CONTAINER }}" \
+            --recursive
