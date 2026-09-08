@@ -35,7 +35,7 @@ namespace MainProjectNumoPart.Tests
         }
 
         [Fact]
-        public async Task AddAsync_CreatesADiagramAnchoredMark()
+        public async Task AddAsync_CreatesAPositionOnlyMarkWhenNoPhotoGiven()
         {
             using var db = TestDbContextFactory.CreateInMemory();
             var vehicle = SeedVehicle(db);
@@ -183,15 +183,15 @@ namespace MainProjectNumoPart.Tests
             Assert.Single(db.DamageMarks);
         }
 
-        // A diagram-anchored mark never referenced a photo, so deleting an UNRELATED photo on
+        // A position-only mark never referenced a photo, so deleting an UNRELATED photo on
         // the same vehicle must leave it untouched.
         [Fact]
-        public async Task DeletingAnUnrelatedPhotoLeavesDiagramAnchoredMarksAlone()
+        public async Task DeletingAnUnrelatedPhotoLeavesPositionOnlyMarksAlone()
         {
             using var db = TestDbContextFactory.CreateInMemory();
             var vehicle = SeedVehicle(db);
             var photo = SeedPhoto(db, vehicle);
-            await Build(db).AddAsync(vehicle.Id, Part.FrontBumper, null, 50, 50, "diagram mark", "u1", "staff@w.local");
+            await Build(db).AddAsync(vehicle.Id, Part.FrontBumper, null, 50, 50, "position-only mark", "u1", "staff@w.local");
 
             db.Photos.Remove(photo);
             db.SaveChanges();

@@ -1,17 +1,18 @@
 // wwwroot/js/damagemarks.js
 //
-// Drives the damage-marking popup on Pages/Vehicles/Details.cshtml. Listens for 'carpartmarked'
-// from the always-rendered "Mark damage" diagram (#damage-diagram, mode="mark" in
-// cardiagram.js), opens a Bootstrap modal, and lets the user click a photo or a zoomed diagram
-// shape to drop a pin — a "layer over it", never burned into the image itself.
+// Drives the damage-marking popup on Pages/Vehicles/Details.cshtml. Triggered by picking a part
+// from #damage-mark-part-select and clicking #damage-mark-open, it shows a Bootstrap modal where
+// clicking a tagged photo of that part drops a pin — a "layer over it", never burned into the
+// image itself. A part with no tagged photo falls back to a note-only record at a fixed position,
+// since there is nothing to click a pin onto.
 (function () {
-    const root = document.getElementById('damage-diagram');
+    const partSelect = document.getElementById('damage-mark-part-select');
+    const openBtn = document.getElementById('damage-mark-open');
     const modalEl = document.getElementById('damage-mark-modal');
-    if (!root || !modalEl || typeof bootstrap === 'undefined') return;
+    if (!partSelect || !openBtn || !modalEl || typeof bootstrap === 'undefined') return;
 
     const modal = new bootstrap.Modal(modalEl);
     const titleEl = document.getElementById('damage-mark-title');
-    const tabsEl = document.getElementById('damage-mark-tabs');
     const photoSelect = document.getElementById('damage-mark-photo-select');
     const canvasWrap = document.getElementById('damage-mark-canvas-wrap');
     const noteForm = document.getElementById('damage-mark-note-form');
@@ -19,9 +20,9 @@
     const errorEl = document.getElementById('damage-mark-error');
 
     let currentPart = null;
-    let currentTab = 'diagram';
     let currentPhotoId = null;
     let pendingClick = null; // { xPercent, yPercent } awaiting Save
+    let hasPhoto = false; // whether the pending mark, if saved, should carry currentPhotoId or null
 
     function marksFor(part, photoId) {
         return window.__damageMarksData.filter((m) =>
@@ -64,8 +65,8 @@
     }
 
     // A click anywhere on the target that ISN'T an existing dot starts a new pending mark.
-    // Re-attached each time the tab/photo changes since canvasWrap's contents are replaced
-    // wholesale, not patched in place.
+    // Re-attached each time the photo changes since canvasWrap's contents are replaced wholesale,
+    // not patched in place.
     function attachClickToPlace(target) {
         if (!window.__canMarkDamage) return; // Viewers can look, not mark
         target.addEventListener('click', (e) => {
@@ -88,47 +89,16 @@
     }
 
     function renderNoVisual() {
-        // Button-only parts (Interior, fenderliners, etc.) have no SVG shape and, if nothing is
-        // tagged yet, no photo either — there is nothing sensible to click a pin onto. The
+        // Nothing tagged to this part yet — there is nothing sensible to click a pin onto. The
         // record itself (part, note, author, timestamp) is still the point, so marking still
         // works here; it just saves at a fixed centred position instead of a real pin.
-        canvasWrap.innerHTML = '<div class="damage-mark-empty">No photo or diagram shape for this part yet — you can still record a note.</div>';
+        canvasWrap.innerHTML = '<div class="damage-mark-empty">No photo tagged to this part yet — you can still record a note.</div>';
+        hasPhoto = false;
         if (!window.__canMarkDamage) return;
         pendingClick = { xPercent: 50, yPercent: 50 };
         noteForm.classList.remove('d-none');
         noteInput.value = '';
         errorEl.textContent = '';
-    }
-
-    function renderDiagramTab() {
-        canvasWrap.innerHTML = '';
-        // Any view works — the clone is measured once it's in THIS visible container, not the
-        // source view, so it doesn't matter whether the source's own view is currently active.
-        const source = root.querySelector('[data-part="' + currentPart + '"]');
-        if (!source || source.tagName === 'BUTTON') { renderNoVisual(); return; }
-
-        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        svg.style.background = '#eceae3';
-        const clone = source.cloneNode(true);
-        clone.removeAttribute('class');
-        clone.setAttribute('fill', '#cfd6da');
-        clone.setAttribute('stroke', '#5f5e5a');
-        clone.setAttribute('stroke-width', '1.5');
-        svg.appendChild(clone);
-        canvasWrap.appendChild(svg);
-
-        // getBBox() needs the element to actually be laid out (display:block, attached) — true
-        // here because the modal is only populated after 'shown.bs.modal' fires (see below).
-        // Measuring the CLONE (now inside this visible popup) rather than the ORIGINAL source
-        // sidesteps the fact that the source's own view might not be the diagram's active one,
-        // where display:none would make getBBox() return a zero-size rect instead.
-        const bbox = clone.getBBox();
-        const pad = Math.max(bbox.width, bbox.height, 10) * 0.15;
-        svg.setAttribute('viewBox',
-            (bbox.x - pad) + ' ' + (bbox.y - pad) + ' ' + (bbox.width + pad * 2) + ' ' + (bbox.height + pad * 2));
-
-        attachClickToPlace(canvasWrap);
-        renderDots(canvasWrap, null);
     }
 
     function renderPhotoTab() {
@@ -143,6 +113,7 @@
             photoSelect.classList.add('d-none');
         }
         currentPhotoId = parseInt(photoSelect.value || photos[0].id, 10);
+        hasPhoto = true;
 
         canvasWrap.innerHTML = '';
         const img = document.createElement('img');
@@ -155,34 +126,25 @@
         canvasWrap.appendChild(img);
     }
 
-    function setTab(tab) {
-        currentTab = tab;
-        clearPending();
-        tabsEl.querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
-        if (tab === 'diagram') renderDiagramTab(); else renderPhotoTab();
-    }
-
-    tabsEl.querySelectorAll('button').forEach((btn) => {
-        btn.addEventListener('click', () => setTab(btn.dataset.tab));
-    });
     photoSelect.addEventListener('change', () => {
         currentPhotoId = parseInt(photoSelect.value, 10);
         renderPhotoTab();
     });
 
-    root.addEventListener('carpartmarked', (e) => {
-        currentPart = e.detail.part;
-        titleEl.textContent = 'Mark damage — ' + currentPart;
+    openBtn.addEventListener('click', () => {
+        currentPart = partSelect.value;
+        titleEl.textContent = 'Mark damage — ' + partSelect.options[partSelect.selectedIndex].textContent;
         modal.show();
     });
 
     // Content is populated only once Bootstrap confirms the modal has finished its show
-    // transition, not immediately on carpartmarked — getBBox() and image layout both need real,
-    // visible layout to measure, and the modal is display:none right up until this event fires.
+    // transition, not immediately on click — image layout needs real, visible layout to measure,
+    // and the modal is display:none right up until this event fires.
     modalEl.addEventListener('shown.bs.modal', () => {
         if (!currentPart) return;
-        const hasPhotos = photosFor(currentPart).length > 0;
-        setTab(hasPhotos ? 'photo' : 'diagram');
+        clearPending();
+        photoSelect.classList.add('d-none');
+        renderPhotoTab();
     });
 
     document.getElementById('damage-mark-cancel').addEventListener('click', clearPending);
@@ -195,7 +157,7 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 part: currentPart,
-                photoId: currentTab === 'photo' ? currentPhotoId : null,
+                photoId: hasPhoto ? currentPhotoId : null,
                 xPercent: pendingClick.xPercent,
                 yPercent: pendingClick.yPercent,
                 note: noteInput.value

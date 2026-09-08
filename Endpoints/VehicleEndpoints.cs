@@ -14,8 +14,8 @@ namespace MainProjectNumoPart.Endpoints
 
         public record AddUpdateRequest(string? Body);
 
-        // PhotoId is nullable — null means the mark is anchored to the generic part diagram
-        // rather than a specific photo.
+        // PhotoId is nullable — null means the part had no tagged photo when the mark was made,
+        // so it's anchored at a fixed position rather than a specific photo.
         public record AddDamageMarkRequest(Part Part, int? PhotoId, double XPercent, double YPercent, string? Note);
 
         public static void MapVehicleEndpoints(this WebApplication app)

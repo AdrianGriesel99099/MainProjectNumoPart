@@ -317,73 +317,15 @@ body {
 .photo-part { position: absolute; left: 6px; bottom: 6px; right: 40px; background: rgba(78,134,199,0.85); color: #fff; font-family: var(--f-mono); font-size: 0.6rem; padding: 2px 6px; border-radius: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .photo-tile.part-hidden { display: none; }
 
-/* NOTE on this block: the 3D picker's own backdrop (.car-picker-canvas-wrap, below) went dark
-   once car3d.js's lighting was rebuilt to match the reference scene exactly (real fog, floor and
-   grid painted in WebGL rather than a CSS gradient standing in for one). .car-stage and
-   .damage-mark-canvas-wrap are LEFT LIGHT here deliberately, not overlooked: the 2D SVG car's own
-   fill colours were chosen to sit on light paper, and .damage-mark-canvas-wrap displays real
-   uploaded photos, which need a neutral light surround to read correctly regardless of theme.
-   What's fixed here is only what would otherwise look visibly broken against the dark page: nav
-   buttons and text sitting directly on --void, and the selection-state colours (hover/selected/
-   covered), which are simple semantic swaps independent of the backdrop. */
-.car-diagram { max-width: 560px; }
-.car-diagram-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
-.car-view-name { font-weight: 600; font-size: 0.95rem; }
-.car-legend { font-size: 0.75rem; color: var(--muted); }
-.car-legend-swatch { display: inline-block; width: 11px; height: 11px; border-radius: 3px; vertical-align: -1px; margin: 0 4px 0 10px; }
-.car-legend-swatch.has { background: #5DCAA5; border: 1px solid #0F6E56; }
-.car-legend-swatch.none { background: transparent; border: 1px solid var(--line-2); }
-.car-stage { position: relative; background: #faf9f5; border: 1px solid #e3e1d9; border-radius: 8px; padding: 12px 46px; }
-.car-view { display: none; width: 100%; }
-.car-view.active { display: block; }
-.car-view-top { max-height: 400px; }
-.car-body { fill: #eceae3; stroke: #5f5e5a; stroke-width: 2; stroke-linejoin: round; }
-.car-arch { fill: #faf9f5; }
-.car-tyre { fill: #2f2e2b; }
-.car-rim { fill: #d9d6cd; stroke: #5f5e5a; }
-.car-detail { fill: none; stroke: #8a8880; stroke-width: 1.2; pointer-events: none; }
-.car-detail .car-glass { fill: #cfd6da; stroke: #5f5e5a; stroke-width: 1.3; }
-.car-detail .car-handle { fill: #8a8880; stroke: none; }
-.cp { fill: transparent; stroke: #b9b7ae; stroke-width: 0.9; cursor: pointer; }
-.cp:hover { fill: rgba(118,198,234,0.35); stroke: var(--ice); stroke-width: 1.6; }
-.cp:focus { outline: none; fill: rgba(118,198,234,0.35); stroke: var(--ice); stroke-width: 2; }
-.cp.selected { fill: rgba(242,160,62,0.55); stroke: var(--amber); stroke-width: 2; }
-.cp.covered { fill: rgba(93,202,165,0.7); stroke: #0F6E56; stroke-width: 1.8; }
-.cp.covered.selected { stroke: var(--amber); stroke-width: 2.6; }
-/* Sits on the dark page directly (outside .car-stage), so it needs its own themed treatment
-   rather than the light "paper" one the diagram interior keeps for now. */
-.car-nav { position: absolute; width: 32px; height: 32px; padding: 0; border-radius: 50%; border: 1px solid var(--line-2); background: var(--panel); color: var(--paper); cursor: pointer; font-size: 1rem; line-height: 1; }
-.car-nav:hover { background: var(--panel-2); border-color: var(--ice); }
-.car-nav-left { left: 6px; top: 50%; transform: translateY(-50%); }
-.car-nav-right { right: 6px; top: 50%; transform: translateY(-50%); }
-.car-nav-up { left: 50%; top: 6px; transform: translateX(-50%); }
-.car-nav-down { left: 50%; bottom: 6px; transform: translateX(-50%); }
-.car-extras { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-.cp-btn.selected { background: var(--amber); color: #241505; border-color: var(--amber); }
-.cp-btn.covered { background: #5DCAA5; border-color: #0F6E56; color: #04342C; }
-
-.car-picker { max-width: 480px; }
-/* No CSS backdrop any more: the reference scene paints its own environment (scene.background +
-   fog, both #070910) directly in WebGL, matching how it looks in the source file exactly, rather
-   than compositing a transparent canvas over a CSS gradient standing in for a studio floor. */
-.car-picker-canvas-wrap {
-    position: relative;
-    background: #070910;
-    border: 1px solid var(--line-2);
-    border-radius: 8px;
-    overflow: hidden;
-}
-.car-picker-canvas { display: block; width: 100%; touch-action: none; cursor: grab; }
-.car-picker-canvas:active { cursor: grabbing; }
-.car-picker-loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; color: var(--muted); background: #070910; }
-.car-picker-hint { margin-top: 4px; color: var(--muted); }
-
 /* filter() rather than a hardcoded darker colour so this works on any .btn-* variant without
    having to match each one's own shade — an immediate visual response on click, independent of
    the (much longer) spinner that follows once the upload is actually underway. */
 .btn-clicked { filter: brightness(0.82); pointer-events: none; }
 
-#damage-mark-tabs button.active { background: var(--amber); color: #241505; border-color: var(--amber); }
+/* Coverage badges (Vehicles/Details.cshtml): one per part that has at least one photo, replacing
+   the old coverage diagram's shaded/clickable regions with a plain clickable list. */
+.coverage-badge.active { background: var(--amber); color: #241505; border-color: var(--amber); }
+
 .damage-mark-canvas-wrap { position: relative; max-width: 520px; min-height: 120px; background: #f4f3ee; border: 1px solid var(--line-2); border-radius: 8px; overflow: hidden; cursor: crosshair; display: flex; align-items: center; justify-content: center; }
 .damage-mark-canvas-wrap img, .damage-mark-canvas-wrap svg { display: block; width: 100%; height: auto; }
 .damage-mark-canvas-wrap .damage-mark-empty { padding: 2rem; color: #888; font-size: 0.85rem; cursor: default; text-align: center; }

@@ -15,13 +15,15 @@ namespace MainProjectNumoPart.Models
         // would silently become wrong. This can't.
         public Part Part { get; set; }
 
-        // Null = marked on the generic part diagram, not a specific photo.
+        // Null = no photo was tagged to this part yet when the mark was made, so it has nothing
+        // to be anchored to — XPercent/YPercent are then a fixed centred position rather than a
+        // real pin (see damagemarks.js's no-visual fallback).
         public int? PhotoId { get; set; }
         public Photo? Photo { get; set; }
 
-        // Position as a PERCENTAGE of whatever image is displayed (photo or diagram crop),
-        // 0-100. Never pixel coordinates — the mark must render correctly regardless of how
-        // large the image is drawn (a thumbnail in a list vs. full-size in the popup).
+        // Position as a PERCENTAGE of whatever image is displayed, 0-100. Never pixel
+        // coordinates — the mark must render correctly regardless of how large the image is
+        // drawn (a thumbnail in a list vs. full-size in the popup).
         public double XPercent { get; set; }
         public double YPercent { get; set; }
 

@@ -23,9 +23,9 @@ namespace MainProjectNumoPart.Pages.Vehicles
         public Vehicle Vehicle { get; set; } = null!;
         public ILookup<Stage, Photo> PhotosByStage { get; set; } = null!;
 
-        // Drives the coverage map: which parts have at least one photo, and how many. The count
-        // is what turns the diagram from decoration into a worklist — you can see at a glance
-        // what still needs shooting before the car leaves.
+        // Drives the coverage list: which parts have at least one photo, and how many. The count
+        // is what turns it from decoration into a worklist — you can see at a glance what still
+        // needs shooting before the car leaves.
         public Dictionary<Part, int> PhotoCountsByPart { get; set; } = new();
 
         public int UntaggedCount { get; set; }

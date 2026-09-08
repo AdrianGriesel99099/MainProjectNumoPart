@@ -12,9 +12,11 @@ namespace MainProjectNumoPart.Models
     // existing photo — a bug that surfaces months later as "the wrong panel". Append new parts
     // with the next free number; never renumber an existing one.
     //
-    // [Display] names drive Html.GetEnumSelectList<Part>() with no extra plumbing, and the
-    // member names are also the mesh names in the generated 3D model — CarModelManifestTests
-    // pins that correspondence.
+    // [Display] names drive Html.GetEnumSelectList<Part>() with no extra plumbing. There is no
+    // visual car picker (3D or 2D diagram) any more — both were built, then removed in favour of
+    // this plain enum-backed <select> everywhere a part needs picking — so every member here is
+    // reachable exactly the same way, a dropdown option, regardless of the historical notes below
+    // about which ones used to have a clickable hotspot and which never did.
     public enum Part
     {
         [Display(Name = "Front bumper")] FrontBumper = 1,
@@ -59,8 +61,9 @@ namespace MainProjectNumoPart.Models
         [Display(Name = "Left front bumper grill")] BumperGrillFrontLeft = 42,
         [Display(Name = "Right front bumper grill")] BumperGrillFrontRight = 43,
 
-        // These six have no honest position on a drawing of the car's outside, so the UI offers
-        // them as plain buttons rather than inventing hotspots for them.
+        // These six never had an honest position on a drawing of the car's outside, even back
+        // when there was a diagram/3D picker to put a hotspot on — inventing one would have been
+        // a made-up position, not a real one.
         [Display(Name = "Interior")] Interior = 28,
         [Display(Name = "Engine bay")] EngineBay = 29,
         [Display(Name = "Boot interior")] LoadArea = 30,
@@ -69,8 +72,8 @@ namespace MainProjectNumoPart.Models
         [Display(Name = "Other / general")] Other = 33,
 
         // Fenderliners (inside the wheel arch) and bumper slides (mounting brackets behind the
-        // bumper cover) join the six above for the same reason: not visible from outside the
-        // car, so a diagram/3D hotspot for them would be an invented position, not a real one.
+        // bumper cover) join the six above for the same reason: not visible from outside the car,
+        // so a hotspot for them would have been an invented position, not a real one.
         [Display(Name = "Left front fenderliner")] FenderlinerFrontLeft = 44,
         [Display(Name = "Right front fenderliner")] FenderlinerFrontRight = 45,
         [Display(Name = "Left front bumper slide")] BumperSlideFrontLeft = 46,
@@ -78,9 +81,9 @@ namespace MainProjectNumoPart.Models
         [Display(Name = "Left rear bumper slide")] BumperSlideRearLeft = 48,
         [Display(Name = "Right rear bumper slide")] BumperSlideRearRight = 49,
 
-        // The 3D reference build this picker's geometry was ported from treats these as real,
-        // individually clickable/inspectable parts, not decoration — the earlier port had them
-        // visible in 3D but not selectable here. Added as their own parts to match.
+        // Added when this app briefly had a 3D car picker ported from a reference build that
+        // treated these as real, individually clickable parts rather than decoration. The picker
+        // is gone, but the enum values are append-only and permanent, so they stay.
         [Display(Name = "Cowl panel")] CowlPanel = 50,
         [Display(Name = "Left A-pillar")] PillarALeft = 51,
         [Display(Name = "Right A-pillar")] PillarARight = 52,

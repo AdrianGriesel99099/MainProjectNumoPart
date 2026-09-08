@@ -101,12 +101,27 @@
     </script>
 }
 
-@* Always rendered, unlike the coverage map below — marking damage should work from the moment
+@* Always rendered, unlike the coverage list below — marking damage should work from the moment
    a vehicle exists, before any photo has been taken, so it can't depend on Photos.Count. *@
+@* The trigger below is shown to every role, not just uploaders — picking a part and opening
+   the popup is also how anyone browses that part's existing marks/photo. Whether the popup lets
+   you actually ADD a new one is gated inside it by window.__canMarkDamage (see damagemarks.js),
+   the same split the diagram-based version had: clicking opened the popup for everyone, only
+   the pending-click-to-place behaviour inside it was upload-role-gated. *@
 <details class="mark-damage mb-3">
     <summary>Mark damage</summary>
-    <p class="small text-muted mt-2 mb-2">Click a part below to record damage against it.</p>
-    <partial name="_CarDiagram" model="@(new MainProjectNumoPart.Pages.Shared.CarDiagramModel { Mode = "mark", ElementId = "damage-diagram" })" />
+    <div class="d-flex gap-2 align-items-end mt-2 mb-2" style="max-width:420px">
+        <div class="flex-grow-1">
+            <label for="damage-mark-part-select" class="form-label small mb-1">Part</label>
+            <select id="damage-mark-part-select" class="form-select form-select-sm">
+                @foreach (var part in Enum.GetValues<MainProjectNumoPart.Models.Part>())
+                {
+                    <option value="@part">@Html.DisplayFor(_ => part)</option>
+                }
+            </select>
+        </div>
+        <button type="button" id="damage-mark-open" class="btn btn-sm btn-primary">Open</button>
+    </div>
 </details>
 
 <details class="damage-marks-list mb-3">
@@ -131,7 +146,7 @@
                     }
                     else
                     {
-                        <div class="text-muted small" style="width:60px;flex-shrink:0">(diagram)</div>
+                        <div class="text-muted small" style="width:60px;flex-shrink:0">(no photo)</div>
                     }
                     <div class="flex-grow-1">
                         <div class="d-flex justify-content-between">
@@ -164,10 +179,10 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <div class="btn-group btn-group-sm mb-2" id="damage-mark-tabs">
-                    <button type="button" class="btn btn-outline-secondary" data-tab="diagram">Diagram</button>
-                    <button type="button" class="btn btn-outline-secondary" data-tab="photo">Photo</button>
-                </div>
+                @* No tab selector: with the diagram gone there is only one real visual option
+                   (a tagged photo of the part, if one exists) plus the text-only fallback when
+                   there isn't one — damagemarks.js picks between them automatically, there is
+                   nothing left for the user to choose between. *@
                 <select id="damage-mark-photo-select" class="form-select form-select-sm mb-2 d-none"></select>
                 <div id="damage-mark-canvas-wrap" class="damage-mark-canvas-wrap"></div>
                 <form id="damage-mark-note-form" class="d-none mt-2">
@@ -218,7 +233,19 @@
                 — @Model.PhotoCountsByPart.Count of @(Enum.GetValues<MainProjectNumoPart.Models.Part>().Length) parts covered@(Model.UntaggedCount > 0 ? $", {Model.UntaggedCount} photo(s) untagged" : "")
             </span>
         </summary>
-        <partial name="_CarDiagram" model="@(new MainProjectNumoPart.Pages.Shared.CarDiagramModel { Mode = "coverage", ElementId = "coverage-diagram", PhotoCounts = Model.PhotoCountsByPart })" />
+        @* One badge per part that has at least one photo — click toggles filtering the photo
+           strips below to that part, same behaviour the coverage diagram used to drive by
+           clicking a shaded region. Parts with zero photos aren't listed at all: with no diagram
+           there is no "everything, shaded or not" surface to show them against, and 78 possible
+           parts is too many empty badges to scan for the ones that matter. *@
+        <div id="coverage-badges" class="d-flex flex-wrap gap-2 mt-2">
+            @foreach (var kvp in Model.PhotoCountsByPart.OrderBy(kvp => kvp.Key.ToString()))
+            {
+                <button type="button" class="btn btn-sm btn-outline-secondary coverage-badge" data-part="@kvp.Key">
+                    @Html.DisplayFor(_ => kvp.Key) <span class="text-muted">(@kvp.Value)</span>
+                </button>
+            }
+        </div>
         <div id="coverage-filter-note" class="small mt-2"></div>
     </details>
 }
@@ -260,22 +287,11 @@
    bulk action to share the same selection. *@
 <form id="selection-download-form" data-selection-ids method="post" action="/api/photos/download"></form>
 
-@if (User.CanUpload())
-{
-    @* The 3D picker needs real vertical space that a sticky bottom bar cannot spare, so it
-       lives in a collapsible panel above the bar instead of inline in it. Both it and the
-       compact select in the bar itself target the same #tag-part element. *@
-    <div id="tag-part-panel" class="d-none mb-2">
-        <partial name="_CarPicker" model="@(new MainProjectNumoPart.Pages.Shared.CarPickerModel { ElementId = "selection-car-picker", SelectElementId = "tag-part" })" />
-    </div>
-}
-
 <div id="selection-bar" class="selection-bar d-none">
     <span id="selection-count"></span>
     <span class="flex-spacer"></span>
     @if (User.CanUpload())
     {
-        <button type="button" id="tag-part-toggle" class="btn btn-sm btn-outline-light">Pick on car</button>
         <select id="tag-part" class="form-select form-select-sm" style="width:auto" aria-label="Set part for selected photos">
             <option value="">Set part…</option>
             <option value="__clear__">— clear part —</option>
@@ -293,26 +309,21 @@
 
 @if (Model.Vehicle.Photos.Count > 0)
 {
-    <script src="~/js/cardiagram.js"></script>
     <script>
         (function () {
-            const diagram = document.getElementById('coverage-diagram');
-            if (!diagram || !diagram.applyCoverage) return;
+            const badges = document.querySelectorAll('.coverage-badge');
+            if (badges.length === 0) return;
 
             const counts = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(
                 Model.PhotoCountsByPart.ToDictionary(k => k.Key.ToString(), v => v.Value)));
-            diagram.applyCoverage(Object.keys(counts));
 
             const note = document.getElementById('coverage-filter-note');
             let active = null;
 
             // Filtering is client-side: the photos are already on the page, so a round-trip
             // would only make it slower and lose the selection.
-            diagram.addEventListener('carpartfiltered', (e) => {
-                const part = e.detail.part;
-                active = (active === part) ? null : part;
-                diagram.setSelected(active);
-
+            function applyFilter() {
+                badges.forEach(b => b.classList.toggle('active', b.dataset.part === active));
                 document.querySelectorAll('.photo-tile').forEach(t => {
                     t.classList.toggle('part-hidden', active !== null && t.dataset.part !== active);
                 });
@@ -321,19 +332,19 @@
                     note.textContent = '';
                 } else {
                     const n = counts[active] || 0;
-                    note.innerHTML = n === 0
-                        ? '<span class="text-danger">No photos of that part yet.</span> <a href="#" id="coverage-clear">Show all</a>'
-                        : `Showing ${n} photo(s) of that part. <a href="#" id="coverage-clear">Show all</a>`;
+                    note.innerHTML = `Showing ${n} photo(s) of that part. <a href="#" id="coverage-clear">Show all</a>`;
+                    document.getElementById('coverage-clear').addEventListener('click', (ev) => {
+                        ev.preventDefault();
+                        active = null;
+                        applyFilter();
+                    });
                 }
+            }
 
-                document.getElementById('coverage-clear')?.addEventListener('click', (ev) => {
-                    ev.preventDefault();
-                    active = null;
-                    diagram.clearSelection();
-                    document.querySelectorAll('.photo-tile').forEach(t => t.classList.remove('part-hidden'));
-                    note.textContent = '';
-                });
-            });
+            badges.forEach(b => b.addEventListener('click', () => {
+                active = (active === b.dataset.part) ? null : b.dataset.part;
+                applyFilter();
+            }));
         })();
     </script>
 }
@@ -341,25 +352,6 @@
 @if (User.CanUpload())
 {
     <script>
-        document.getElementById('tag-part-toggle').addEventListener('click', () => {
-            const panel = document.getElementById('tag-part-panel');
-            panel.classList.toggle('d-none');
-            // The picker measured its container's width while the panel was display:none and
-            // got 0 back — car3d.js now skips sizing to 0 rather than locking it in, but still
-            // needs telling once real layout exists. Without this the canvas stays invisible
-            // even though .car-picker-3d itself is no longer hidden.
-            //
-            // Deferred with setTimeout rather than called synchronously: removing d-none only
-            // SCHEDULES a layout recalculation, it doesn't force one, so a resize() called in
-            // the same tick can still read the pre-toggle clientWidth (0) back — confirmed by
-            // instrumenting car3d.js and finding clientWidth still 0 immediately after the
-            // class was already removed. One tick later, the browser has laid the panel out.
-            setTimeout(() => {
-                const picker = document.getElementById('selection-car-picker');
-                if (picker && picker.resize) picker.resize();
-            }, 0);
-        });
-
         document.getElementById('tag-part').addEventListener('change', async (e) => {
             const raw = e.target.value;
             if (!raw) return;

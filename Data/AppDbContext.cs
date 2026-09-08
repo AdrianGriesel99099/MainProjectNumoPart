@@ -38,10 +38,11 @@ namespace MainProjectNumoPart.Data
                 .HasIndex(p => new { p.VehicleId, p.Stage, p.SequenceNumber })
                 .IsUnique();
 
-            // DamageMark.PhotoId is nullable (a mark can be anchored to the generic part diagram
-            // instead of a specific photo), and EF's DEFAULT behaviour for an OPTIONAL foreign
-            // key is SetNull on delete, not cascade — unlike every other relationship in this
-            // file, which are all required and cascade by convention with no config needed.
+            // DamageMark.PhotoId is nullable (a mark can be made against a part with no tagged
+            // photo yet, anchored at a fixed position instead), and EF's DEFAULT behaviour for an
+            // OPTIONAL foreign key is SetNull on delete, not cascade — unlike every other
+            // relationship in this file, which are all required and cascade by convention with no
+            // config needed.
             //
             // A photo-anchored mark's X/Y position is meaningless once the photo it points at is
             // gone, so it still needs cleaning up when a photo is deleted — but NOT via a second
