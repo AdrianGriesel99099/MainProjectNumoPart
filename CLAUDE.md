@@ -64,3 +64,14 @@ the evening deploy loop merges to master, and only after tests pass and after ch
 
 If a production rollback is ever needed, see the `Rollback deploy` GitHub Actions workflow
 (`.github/workflows/rollback.yml`, manually triggered) rather than reasoning it out from scratch.
+
+## Changelog (`Data/changelog.json` → `/Changelog` page)
+
+User-facing "what's new" entries, read at runtime from `Data/changelog.json` by
+`Pages/Changelog.cshtml.cs`. Each entry is `{date, title, description}`; `description` is shown
+to end users, so write it in plain language, not implementation detail. The evening deploy loop
+appends an entry here when it merges that day's `auto/feature-<date>` PR (see its own prompt) —
+don't hand-maintain this file for feature work that loop already covers. The file is copied to
+the published output via an explicit `<None>` entry in the `.csproj` (it isn't under `wwwroot/`,
+so this isn't automatic) — if the copy directive is ever removed, the page silently renders empty
+in production rather than erroring.
