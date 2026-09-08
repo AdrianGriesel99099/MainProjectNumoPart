@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>FeatureReviewBot</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Project-referencing the main app rather than duplicating its schema: this tool reads and
+         writes FeatureProposal/FeatureProposalRound through the SAME AppDbContext/Models the web
+         app uses, so a future schema change only has to happen in one place. -->
+    <ProjectReference Include="..\..\MainProjectNumoPart.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.29" />
+  </ItemGroup>
+
+</Project>

@@ -3,6 +3,27 @@
 Production infrastructure notes that don't belong in `LOCAL_DEV.md` — that file is about running
 this app on your own machine; this one is about the real, permanently-running Azure resources.
 
+## Automated daily loops
+
+Six cloud Claude Code routines run unattended against this repo (`claude.ai/code/routines`, not a
+GitHub Actions workflow — they clone the repo but have no access to production Azure resources at
+all, unlike the GitHub Actions workflows below). Every one of the first five works on its own
+branch and opens a PR; **only the evening deploy routine merges to master**, and only after that
+day's PRs pass tests and don't contain `MIGRATION NEEDED:` (see `CLAUDE.md` → "Database migrations").
+
+| Time (SAST / UTC) | Routine | Branch | Does |
+|---|---|---|---|
+| 00:00 / 22:00 | Morning code review | `auto/codereview-morning-<date>` | Reviews the previous day's merged work, opens fix PRs for anything it finds |
+| 05:00 / 03:00 | New feature | `auto/feature-<date>` | Builds the top `docs/BACKLOG.md` item if one's queued (see "Feature proposals & review" in `CLAUDE.md`), otherwise picks its own small feature |
+| 10:00 / 08:00 | Functionality improvement | `auto/improvement-<date>` | Test-first improvement to something that already exists |
+| 15:00 / 13:00 | Frontend/UX pass | `auto/ux-<date>` | Small, focused UI polish |
+| 19:00 / 17:00 | Evening code review | `auto/codereview-evening-<date>` | Reviews that day's other four PRs, approves or requests changes |
+| 20:00 / 18:00 | Deploy today's changes | *(merges to master directly)* | Merges every approved, migration-clean PR from that day one at a time, watching each deploy before merging the next; also appends the day's shipped features to `Data/changelog.json` |
+
+Two GitHub Actions workflows run on their own schedules alongside these — "Photo backup" and
+"Feature proposal review" below. Unlike the cloud routines, both authenticate to real Azure
+resources via OIDC, each with its own narrowly-scoped identity.
+
 ## Photo backup
 
 `.github/workflows/backup-photos.yml` runs daily (02:00 UTC / 04:00 SAST) and copies every blob in
@@ -57,3 +78,36 @@ this only restores the blob itself, not any `Photos` table row that referenced i
 the real signal, not just "the workflow exists." After first setting this up, or after any change
 to `backup-photos.yml`, trigger it manually via `workflow_dispatch` and read the log rather than
 waiting up to 24 hours for the schedule to prove it either way.
+
+## Feature proposal review
+
+`.github/workflows/feature-review.yml` runs daily (02:00 UTC / 04:00 SAST, one hour before the
+"New feature" cloud routine above) and `workflow_dispatch`. It's the review/approval gate described
+in `CLAUDE.md` → "Feature proposals & review": it drafts the next revision for every proposal a
+human sent back for changes, and queues every proposal a human gave final approval to into
+`docs/BACKLOG.md` for the feature-building routine to pick up.
+
+**What it touches, and what it doesn't.** It's the only automated process (cloud routine or
+workflow) that talks to the production database directly — everything else in this pipeline only
+ever sees a git checkout. `Tools/FeatureReviewBot` (a console app, project-referencing the main app
+so its schema knowledge can never drift from the real one) reads and writes exactly two tables:
+`FeatureProposals` and `FeatureProposalRounds`. It also calls the Anthropic API to draft each
+revision, and can push a single commit to `docs/BACKLOG.md` (nothing else) when something gets
+queued.
+
+**Identity.** OIDC as its own App Registration, `github-feature-review-bot`, same reasoning as the
+backup identity above — a compromised or misconfigured credential here can read/write two tables and
+push a docs-only commit, nothing more. Unlike the backup identity it holds no Azure RBAC role at
+all; instead it's a SQL Server contained database user (`CREATE USER ... FROM EXTERNAL PROVIDER`)
+granted `SELECT, INSERT, UPDATE` on just those two tables — no access to `Vehicles`, `Photos`, or
+any other table in `sqldb-workshop-photos-prod`. Both federated-credential subject formats are
+registered, same as the backup identity (see that section above for why both are needed).
+`AZURE_FEATURE_BOT_CLIENT_ID` (its app id), `AZURE_SQL_CONNECTION_STRING` (server/database only, no
+credential — auth is `Authentication=Active Directory Default`, which reuses the az-cli session
+`azure/login` establishes in the same job), and `ANTHROPIC_API_KEY` are repo secrets.
+`AZURE_TENANT_ID`/`AZURE_SUBSCRIPTION_ID` are shared with the other two workflows.
+
+**Checking it's actually working.** Same habit as the backup workflow: trigger it manually via
+`workflow_dispatch` after first setting it up or after any change, and read the "Run the review
+bot" step's log — it prints how many proposals it found in each state and what it did with each
+one, rather than trusting a green checkmark alone.

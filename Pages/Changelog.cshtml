@@ -70,7 +70,16 @@ else
                 @foreach (var entry in day)
                 {
                     <div class="changelog-entry">
-                        <h3>@entry.Title</h3>
+                        <h3>
+                            @if (entry.Link is not null)
+                            {
+                                <a href="@entry.Link">@entry.Title</a>
+                            }
+                            else
+                            {
+                                @entry.Title
+                            }
+                        </h3>
                         <p>@entry.Description</p>
                     </div>
                 }

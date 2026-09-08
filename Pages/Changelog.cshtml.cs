@@ -15,7 +15,11 @@ namespace MainProjectNumoPart.Pages
         public record Entry(
             [property: JsonPropertyName("date")] DateOnly Date,
             [property: JsonPropertyName("title")] string Title,
-            [property: JsonPropertyName("description")] string Description);
+            [property: JsonPropertyName("description")] string Description,
+            // Set only when a shipped feature traces back to an approved proposal (see
+            // Pages/Features) -- the evening deploy routine fills this in from the merged PR's
+            // "(proposal #N)" tag. Absent for everything else, including this file's seed entries.
+            [property: JsonPropertyName("link")] string? Link = null);
 
         // Grouped by date (newest first) rather than a flat list -- several entries commonly
         // land the same day, and a repeated date on every row would just be visual noise next
