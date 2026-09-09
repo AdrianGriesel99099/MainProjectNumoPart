@@ -114,9 +114,14 @@ actually asked for and approved rather than whatever it freely invents. Anyone S
 submit an idea at `/Features`; the state machine (`Services/FeatureProposalService.cs`,
 `Models/FeatureProposalStatus.cs`) is: `NeedsReview` (awaiting a human decision, whether that's the
 raw submission or a round Claude just revised) → human picks **Looks good — continue** / **Needs
-changes** (comment required) / **Reject idea** → `AwaitingAiRevision` or `Denied` (terminal).
-**Reject idea is always available**, even while `AwaitingAiRevision` — a reviewer can stop a
-proposal any time rather than being locked out until the next cycle drafts something; Accept/Revise
+changes** (comment required) / **Too complex — simplify** (comment optional) / **Reject idea** →
+`AwaitingAiRevision` or `Denied` (terminal). `TooComplex` (`Models/FeatureReviewDecision.cs`) is a
+distinct signal from `Revised`: the idea itself is wanted, but what's been drafted is too much to
+take on as one feature — the routine's prompt cuts scope for the next round instead of just adding
+detail, and leans toward not marking that round `readyForFinalApproval` until the reviewer confirms
+the smaller version works. **Reject idea is always available**, even while `AwaitingAiRevision` —
+a reviewer can stop a proposal any time rather than being locked out until the next cycle drafts
+something; Accept/Revise/TooComplex
 only make sense once there's an actual round to react to. Denying mid-revision doesn't overwrite
 the round that got it there — that round's own Accept/Revise decision stays in the history.
 **A cloud routine cannot reach the site at all.** Confirmed by testing (2026-09-09): the routine

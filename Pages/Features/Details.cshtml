@@ -94,12 +94,15 @@
             <label class="form-label" for="decision-comment">Comment (required if you're asking for changes)</label>
             <textarea id="decision-comment" class="form-control" rows="3" maxlength="2000"></textarea>
         </div>
-        <div class="d-flex gap-2">
+        <div class="d-flex gap-2 flex-wrap">
             <button type="button" class="btn btn-primary" data-decide="Accepted" data-proposal-id="@proposal.Id">
                 @(readyForFinal ? "Approve — build this" : "Looks good — continue")
             </button>
             <button type="button" class="btn btn-outline-secondary" data-decide="Revised" data-proposal-id="@proposal.Id">
                 Needs changes
+            </button>
+            <button type="button" class="btn btn-outline-warning" data-decide="TooComplex" data-proposal-id="@proposal.Id">
+                Too complex — simplify
             </button>
             <button type="button" class="btn btn-outline-danger" data-decide="Denied" data-proposal-id="@proposal.Id">
                 Reject idea
