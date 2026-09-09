@@ -1,0 +1,15 @@
+{
+  "revisedDescription": "Add a \"Select & Export\" flow on the Vehicle Details page so staff can hand a client a clean set of photos without screenshotting or forwarding raw uploads one at a time.\n\nWhere: each photo tile on Vehicle Details (Pages/Vehicles/Details.cshtml, currently grouped by stage with a delete button and no selection UI) gets a checkbox. Selecting one or more photos reveals an \"Export selected (N)\" bar with two format buttons: \"Download as PDF\" and \"Download as JPEGs (.zip)\". This is Staff/Admin only, matching the existing write-action gating convention (Viewers can browse but not export).\n\nContent per photo, in both formats: the image itself (from the original blob, not the thumbnail), plus a caption line with stage, part, and date taken, followed by that photo's comment thread (PhotoComment records) in chronological order. In the PDF this is one photo per page, image on top and caption/comments below; in the ZIP each photo keeps its original filename and a companion .txt file next to it carries the same caption/comments (a JPEG has no text layer to write into).\n\nDownload filename: \"{Vehicle.Reg}-photos-{yyyy-MM-dd}.pdf\" or \"...zip\".\n\nScope deliberately excludes sending email from the app itself — no SMTP/SendGrid exists anywhere in this codebase today, and adding one is a much bigger, separate piece of work (credentials, deliverability, a compose UI) than what \"let me send this to a client\" actually needs. The feature produces a downloadable file; the staff member attaches it to whatever email or message they already send the client through.\n\nImplementation notes: no new database migration — the selection is purely client-side/ephemeral (checkboxes + a form post of photo IDs), nothing about it is persisted. ZIP generation reads existing blobs straight from Azure Blob Storage (Services/BlobPhotoStorage.cs) with no new library. PDF generation needs a new dependency since none exists yet (e.g. QuestPDF's free/community tier, or PdfSharp) — flag that as a new NuGet package in the PR. Cap the export at a sane number of photos per request (e.g. 50) to avoid an oversized synchronous download.\n\nOpen question for this round: whether DamageMark pins (the part-popup annotations, separate from PhotoComment) should be visually burned onto the exported image, which would need ImageSharp compositing work, or left out of the export entirely with just the text comments. See the question below.",
+  "readyForFinalApproval": false,
+  "questions": [
+    {
+      "prompt": "Should exported photos include DamageMark pins (the dots/notes dropped on a part popup), and if so, how?",
+      "options": [
+        "Leave damage marks out — export the plain photo plus its text comments only",
+        "Burn the damage-mark pins onto the image itself (as shown in the on-screen viewer), in addition to the text comments",
+        "Let the person exporting choose per export (adds a checkbox to the export screen)",
+        "Something else (see my comment)"
+      ]
+    }
+  ]
+}
