@@ -39,19 +39,28 @@
             const id = button.dataset.proposalId;
             let comment = null;
 
-            if (decision === 'Revised') {
+            if (decision === 'Revised' || decision === 'TooComplex') {
                 const commentBox = document.getElementById('decision-comment');
                 comment = commentBox ? commentBox.value.trim() : '';
-                if (!comment) {
+                if (decision === 'Revised' && !comment) {
                     showError('Say what should change before sending this back for another round.');
                     return;
                 }
+                if (!comment) comment = null;
             }
+
+            // Answering a question is optional, same as the comment -- only checked radios are
+            // sent. One radio group per question (name="question-<id>"), value is the option id.
+            const answers = Array.from(document.querySelectorAll('input[type=radio][data-question-id]:checked'))
+                .map((input) => ({
+                    questionId: parseInt(input.dataset.questionId, 10),
+                    selectedOptionId: parseInt(input.value, 10)
+                }));
 
             const response = await fetch(`/api/feature-proposals/${id}/decide`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ decision, comment })
+                body: JSON.stringify({ decision, comment, answers })
             });
 
             if (response.ok) {

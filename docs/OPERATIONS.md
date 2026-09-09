@@ -5,24 +5,28 @@ this app on your own machine; this one is about the real, permanently-running Az
 
 ## Automated daily loops
 
-Six cloud Claude Code routines run unattended against this repo (`claude.ai/code/routines`, not a
-GitHub Actions workflow — they clone the repo but have no access to production Azure resources at
-all, unlike the GitHub Actions workflows below). Every one of the first five works on its own
-branch and opens a PR; **only the evening deploy routine merges to master**, and only after that
-day's PRs pass tests and don't contain `MIGRATION NEEDED:` (see `CLAUDE.md` → "Database migrations").
+Seven cloud Claude Code routines run unattended against this repo (`claude.ai/code/routines`, not a
+GitHub Actions workflow — they clone the repo, but have **no network access beyond that git
+checkout at all**, confirmed by testing 2026-09-09: the sandbox's egress proxy rejects any other
+outbound connection, including to this app's own production site). Five of the seven work on their
+own branch and open a PR; **only the evening deploy routine merges those to master**, and only
+after that day's PRs pass tests and don't contain `MIGRATION NEEDED:` (see `CLAUDE.md` → "Database
+migrations"). The feature review routine is the one exception — see its row below and `CLAUDE.md` →
+"Automated daily loops" for why it alone pushes directly.
 
 | Time (SAST / UTC) | Routine | Branch | Does |
 |---|---|---|---|
 | 00:00 / 22:00 | Morning code review | `auto/codereview-morning-<date>` | Reviews the previous day's merged work, opens fix PRs for anything it finds |
-| 05:00 / 03:00 | New feature | `auto/feature-<date>` | Builds the top `docs/BACKLOG.md` item if one's queued (see "Feature proposals & review" in `CLAUDE.md`), otherwise picks its own small feature |
+| 04:00 / 02:00 | Feature review | *(pushes `FeatureReviewQueue/` directly)* | Drafts the next revision for anything a human sent back for changes — reading/writing only its own git checkout, via a queue two GitHub Actions steps maintain either side of it (see "Feature review queue" below) |
+| 05:00 / 03:00 | New feature | `auto/feature-<date>` | Builds the top `docs/BACKLOG.md` item if one's queued, otherwise picks its own small feature |
 | 10:00 / 08:00 | Functionality improvement | `auto/improvement-<date>` | Test-first improvement to something that already exists |
 | 15:00 / 13:00 | Frontend/UX pass | `auto/ux-<date>` | Small, focused UI polish |
 | 19:00 / 17:00 | Evening code review | `auto/codereview-evening-<date>` | Reviews that day's other four PRs, approves or requests changes |
 | 20:00 / 18:00 | Deploy today's changes | *(merges to master directly)* | Merges every approved, migration-clean PR from that day one at a time, watching each deploy before merging the next; also appends the day's shipped features to `Data/changelog.json` |
 
-Two GitHub Actions workflows run on their own schedules alongside these — "Photo backup" and
-"Feature proposal review" below. Unlike the cloud routines, both authenticate to real Azure
-resources via OIDC, each with its own narrowly-scoped identity.
+Three GitHub Actions workflows run on their own schedules alongside these — "Photo backup" (its own
+narrowly-scoped Azure OIDC identity) and the two "Feature review queue" steps (a shared API key)
+below.
 
 ## Photo backup
 
@@ -79,35 +83,29 @@ the real signal, not just "the workflow exists." After first setting this up, or
 to `backup-photos.yml`, trigger it manually via `workflow_dispatch` and read the log rather than
 waiting up to 24 hours for the schedule to prove it either way.
 
-## Feature proposal review
+## Feature review queue
 
-`.github/workflows/feature-review.yml` runs daily (02:00 UTC / 04:00 SAST, one hour before the
-"New feature" cloud routine above) and `workflow_dispatch`. It's the review/approval gate described
-in `CLAUDE.md` → "Feature proposals & review": it drafts the next revision for every proposal a
-human sent back for changes, and queues every proposal a human gave final approval to into
-`docs/BACKLOG.md` for the feature-building routine to pick up.
+Two GitHub Actions workflows run either side of the "Feature review" cloud routine (see the table
+above), relaying data through git because the routine itself can't reach the site — full picture in
+`CLAUDE.md` → "Feature proposals & review". Both run `Tools/FeatureReviewRelay` (pure HTTP + file
+I/O, no AI call, no database) and commit whatever it changes:
 
-**What it touches, and what it doesn't.** It's the only automated process (cloud routine or
-workflow) that talks to the production database directly — everything else in this pipeline only
-ever sees a git checkout. `Tools/FeatureReviewBot` (a console app, project-referencing the main app
-so its schema knowledge can never drift from the real one) reads and writes exactly two tables:
-`FeatureProposals` and `FeatureProposalRounds`. It also calls the Anthropic API to draft each
-revision, and can push a single commit to `docs/BACKLOG.md` (nothing else) when something gets
-queued.
+| Time (SAST / UTC) | Workflow | Does |
+|---|---|---|
+| 03:50 / 01:50 | `feature-review-prepare.yml` | Fetches proposals awaiting revision into `FeatureReviewQueue/pending/`; separately, queues already-approved proposals into `docs/BACKLOG.md` (no reasoning needed for that part, so it doesn't wait for the routine) |
+| 04:15 / 02:15 | `feature-review-apply.yml` | Reads `FeatureReviewQueue/drafted/` (written by the routine in between) and relays each to the site, deleting the file once relayed |
 
-**Identity.** OIDC as its own App Registration, `github-feature-review-bot`, same reasoning as the
-backup identity above — a compromised or misconfigured credential here can read/write two tables and
-push a docs-only commit, nothing more. Unlike the backup identity it holds no Azure RBAC role at
-all; instead it's a SQL Server contained database user (`CREATE USER ... FROM EXTERNAL PROVIDER`)
-granted `SELECT, INSERT, UPDATE` on just those two tables — no access to `Vehicles`, `Photos`, or
-any other table in `sqldb-workshop-photos-prod`. Both federated-credential subject formats are
-registered, same as the backup identity (see that section above for why both are needed).
-`AZURE_FEATURE_BOT_CLIENT_ID` (its app id), `AZURE_SQL_CONNECTION_STRING` (server/database only, no
-credential — auth is `Authentication=Active Directory Default`, which reuses the az-cli session
-`azure/login` establishes in the same job), and `ANTHROPIC_API_KEY` are repo secrets.
-`AZURE_TENANT_ID`/`AZURE_SUBSCRIPTION_ID` are shared with the other two workflows.
+**Authentication.** A shared secret, not OIDC — there's no Azure resource either workflow needs to
+log into, just the site's own API. `FEATURE_REVIEW_API_KEY` (repo secret) is sent as an `X-Api-Key`
+header on every request to `/api/bot/feature-proposals/*` (`Endpoints/FeatureProposalEndpoints.cs`);
+the site checks it against `FeatureReviewBot:ApiKey`, injected into the Container App as an
+environment variable from a Container App secret (`az containerapp secret set
+feature-review-bot-api-key=...`), never checked into `appsettings.json`. `ApiKeyEndpointFilter`
+(`Authorization/ApiKeyEndpointFilter.cs`) rejects every request outright if that value isn't
+configured, rather than falling open. Rotating the key means updating it in two places — the
+Container App secret and the GitHub secret — since a mismatch just fails closed (401), not silently.
 
-**Checking it's actually working.** Same habit as the backup workflow: trigger it manually via
-`workflow_dispatch` after first setting it up or after any change, and read the "Run the review
-bot" step's log — it prints how many proposals it found in each state and what it did with each
-one, rather than trusting a green checkmark alone.
+**Checking it's actually working.** Same habit as the backup workflow: trigger either via
+`workflow_dispatch` after first setting this up or after any change, and read its log rather than
+trusting a green checkmark alone. A `pending/` or `drafted/` file that never seems to clear is the
+sign something's stuck — check the routine's own run log (`claude.ai/code/routines`) next.

@@ -244,5 +244,100 @@ namespace MainProjectNumoPart.Tests
             Assert.Equal("1HGBH41JXMN109186", resolved.Vin); // backfilled onto the winner's row
             Assert.Equal(1, await db.Vehicles.CountAsync());
         }
+
+        [Fact]
+        public async Task FindManyBySearchTermAsync_MatchesMakeModelCaseInsensitively()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var service = new VehicleLookupService(db);
+
+            var vehicle = await service.FindOrCreateAsync("1HGBH41JXMN109186", "AB12CDE");
+            vehicle.MakeModel = "Ford Focus";
+            await db.SaveChangesAsync();
+
+            var results = await service.FindManyBySearchTermAsync("ford focus");
+
+            Assert.Single(results);
+            Assert.Equal(vehicle.Id, results[0].Id);
+        }
+
+        [Fact]
+        public async Task FindManyBySearchTermAsync_MatchesPartialMakeModel()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var service = new VehicleLookupService(db);
+
+            var vehicle = await service.FindOrCreateAsync("1HGBH41JXMN109186", "AB12CDE");
+            vehicle.MakeModel = "Ford Focus";
+            await db.SaveChangesAsync();
+
+            var results = await service.FindManyBySearchTermAsync("focus");
+
+            Assert.Single(results);
+            Assert.Equal(vehicle.Id, results[0].Id);
+        }
+
+        [Fact]
+        public async Task FindManyBySearchTermAsync_MatchesPartialVinOrReg()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var service = new VehicleLookupService(db);
+
+            var vehicle = await service.FindOrCreateAsync("1HGBH41JXMN109186", "AB12CDE");
+            await db.SaveChangesAsync();
+
+            var byVinFragment = await service.FindManyBySearchTermAsync("MN109");
+            var byRegFragment = await service.FindManyBySearchTermAsync("ab12");
+
+            Assert.Single(byVinFragment);
+            Assert.Equal(vehicle.Id, byVinFragment[0].Id);
+            Assert.Single(byRegFragment);
+            Assert.Equal(vehicle.Id, byRegFragment[0].Id);
+        }
+
+        [Fact]
+        public async Task FindManyBySearchTermAsync_ReturnsMultipleMatches()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var service = new VehicleLookupService(db);
+
+            var first = await service.FindOrCreateAsync("1HGBH41JXMN109186", "AB12CDE");
+            first.MakeModel = "Ford Focus";
+            var second = await service.FindOrCreateAsync("2HGBH41JXMN209187", "CD34EFG");
+            second.MakeModel = "Ford Fiesta";
+            await db.SaveChangesAsync();
+
+            var results = await service.FindManyBySearchTermAsync("ford");
+
+            Assert.Equal(2, results.Count);
+        }
+
+        [Fact]
+        public async Task FindManyBySearchTermAsync_ReturnsEmptyForBlankTerm()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var service = new VehicleLookupService(db);
+
+            await service.FindOrCreateAsync(null, "AB12CDE");
+            await db.SaveChangesAsync();
+
+            var results = await service.FindManyBySearchTermAsync("   ");
+
+            Assert.Empty(results);
+        }
+
+        [Fact]
+        public async Task FindManyBySearchTermAsync_ReturnsEmptyWhenNothingMatches()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var service = new VehicleLookupService(db);
+
+            await service.FindOrCreateAsync("1HGBH41JXMN109186", "AB12CDE");
+            await db.SaveChangesAsync();
+
+            var results = await service.FindManyBySearchTermAsync("NOTHINGHERE");
+
+            Assert.Empty(results);
+        }
     }
 }

@@ -141,5 +141,28 @@ namespace MainProjectNumoPart.Services
 
             return await _db.Vehicles.FirstOrDefaultAsync(v => v.Vin == normalized || v.Reg == normalized, ct);
         }
+
+        // The home page's fallback when FindBySearchTermAsync finds no exact identifier match:
+        // a fragment of a VIN/Reg, or a make/model like "Ford Focus", so staff who only remember
+        // part of what they're looking for still land somewhere useful instead of a dead end.
+        // Capped rather than unbounded — this is a "pick the right one" list, not a full browse.
+        private const int MaxResults = 25;
+
+        public async Task<List<Vehicle>> FindManyBySearchTermAsync(string? term, CancellationToken ct = default)
+        {
+            var identifierFragment = NormalizeIdentifier(term);
+            if (identifierFragment is null) return new List<Vehicle>();
+
+            var makeModelFragment = term!.Trim().ToUpperInvariant();
+
+            return await _db.Vehicles
+                .Where(v =>
+                    v.Vin!.Contains(identifierFragment) ||
+                    v.Reg!.Contains(identifierFragment) ||
+                    (v.MakeModel != null && v.MakeModel.ToUpper().Contains(makeModelFragment)))
+                .OrderByDescending(v => v.CreatedAtUtc)
+                .Take(MaxResults)
+                .ToListAsync(ct);
+        }
     }
 }

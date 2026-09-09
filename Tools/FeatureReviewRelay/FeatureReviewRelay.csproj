@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>FeatureReviewRelay</RootNamespace>
+  </PropertyGroup>
+
+  <!-- Pure HTTP + file I/O (HttpClient and System.Text.Json are both in the BCL), with no AI
+       call and no database. Run with one argument, "prepare" or "apply"; see CLAUDE.md's
+       "Feature proposals & review" section for what each does and why this is split into two
+       GitHub Actions runs either side of the review routine instead of one. -->
+
+</Project>

@@ -17,6 +17,8 @@ namespace MainProjectNumoPart.Data
         public DbSet<DamageMark> DamageMarks => Set<DamageMark>();
         public DbSet<FeatureProposal> FeatureProposals => Set<FeatureProposal>();
         public DbSet<FeatureProposalRound> FeatureProposalRounds => Set<FeatureProposalRound>();
+        public DbSet<FeatureProposalQuestion> FeatureProposalQuestions => Set<FeatureProposalQuestion>();
+        public DbSet<FeatureProposalQuestionOption> FeatureProposalQuestionOptions => Set<FeatureProposalQuestionOption>();
 
         protected override void OnModelCreating(ModelBuilder builder)
         {
@@ -61,6 +63,18 @@ namespace MainProjectNumoPart.Data
                 .HasOne(m => m.Photo)
                 .WithMany()
                 .HasForeignKey(m => m.PhotoId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Same shape of problem as DamageMark.PhotoId above: FeatureProposalQuestion.Options
+            // already cascades from Question (required, by convention), so Question's OWN
+            // (optional) pointer to one of its options -- SelectedOptionId -- must not ALSO be a
+            // DB-level cascade path onto the same Options table. Restrict, for the same reason:
+            // nothing ever deletes an Option independently of its Question, so this FK exists
+            // purely to record an answer, never to drive a delete.
+            builder.Entity<FeatureProposalQuestion>()
+                .HasOne(q => q.SelectedOption)
+                .WithMany()
+                .HasForeignKey(q => q.SelectedOptionId)
                 .OnDelete(DeleteBehavior.Restrict);
         }
     }

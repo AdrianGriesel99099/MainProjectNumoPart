@@ -1,8 +1,13 @@
 [
   {
     "date": "2026-09-09",
+    "title": "Feature added: fuzzy home-page search by fragment/make/model",
+    "description": "Search now finds vehicles by partial VIN/Reg fragments and make/model substring (case-insensitive), with up to 25 results returned when multiple matches are found."
+  },
+  {
+    "date": "2026-09-09",
     "title": "Feature ideas",
-    "description": "Suggest a new feature and help review it -- Claude drafts a fuller write-up for anything sent back for changes, and once you give final approval, it's queued up to be built."
+    "description": "Suggest a new feature and help review it -- a fuller write-up gets drafted automatically for anything sent back for changes, and once you give final approval, it's queued up to be built."
   },
   {
     "date": "2026-09-08",
