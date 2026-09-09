@@ -270,8 +270,11 @@ namespace MainProjectNumoPart.Services
             return new FeatureProposalDecisionResult(FeatureProposalDecisionStatus.Success);
         }
 
+        // Rounds included so callers can hand the build step the latest, human-reviewed write-up
+        // rather than the original one-line submission -- see the bot endpoint that consumes this.
         public Task<List<FeatureProposal>> ListApprovedUnqueuedAsync(CancellationToken ct = default) =>
             _db.FeatureProposals
+                .Include(p => p.Rounds)
                 .Where(p => p.Status == FeatureProposalStatus.Approved && p.QueuedForBuildAtUtc == null)
                 .ToListAsync(ct);
 

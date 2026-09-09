@@ -127,7 +127,13 @@ namespace MainProjectNumoPart.Endpoints
             group.MapGet("/approved-unqueued", async (FeatureProposalService proposals, CancellationToken ct) =>
             {
                 var approved = await proposals.ListApprovedUnqueuedAsync(ct);
-                return Results.Ok(approved.Select(p => new BotApprovedProposalView(p.Id, p.Title, p.Description)));
+                // The latest round's write-up, not the original one-line submission -- by the
+                // time a proposal is Approved it's been through at least one round with
+                // AiContent (ReadyForFinalApproval requires that), but the null-coalesce keeps
+                // this safe if that invariant is ever wrong.
+                return Results.Ok(approved.Select(p => new BotApprovedProposalView(
+                    p.Id, p.Title,
+                    p.Rounds.OrderByDescending(r => r.RoundNumber).First().AiContent ?? p.Description)));
             });
 
             group.MapPost("/{id:int}/mark-queued", async (int id, FeatureProposalService proposals, CancellationToken ct) =>

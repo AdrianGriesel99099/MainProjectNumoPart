@@ -173,3 +173,13 @@ one avoids it the same way. `Tools/FeatureReviewRelay` carries questions both di
 bot API includes each round's questions (with option labels and the selected one, if any) in
 `GET /awaiting-ai-revision`, and the routine's own `drafted/<id>.json` can include a `questions`
 array the apply step relays straight through to `POST /revision`.
+
+The routine's own prompt (`claude.ai/code/routines`) keeps two house rules a human reviewer asked
+for after watching the first real run: write-ups stay short (2-4 plain-language sentences, no
+implementation detail — that belongs to whoever actually builds it, not to this review round), and
+the *first* round it drafts for a proposal should ask a plain "did I understand this right?"
+confirmation rather than a design-detail question, moving on to implementation forks only once a
+later round shows the reviewer confirmed the core idea. `ListApprovedUnqueuedAsync` (and the
+`/approved-unqueued` bot endpoint) hand the *latest round's* write-up to `docs/BACKLOG.md`, not the
+original one-line submission — the whole point of the back-and-forth is lost if the build step never
+sees its result.
