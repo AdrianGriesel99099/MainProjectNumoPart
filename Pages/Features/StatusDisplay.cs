@@ -9,7 +9,7 @@ namespace MainProjectNumoPart.Pages.Features
         public static string Label(FeatureProposalStatus status) => status switch
         {
             FeatureProposalStatus.NeedsReview => "Needs review",
-            FeatureProposalStatus.AwaitingAiRevision => "Claude is revising",
+            FeatureProposalStatus.AwaitingAiRevision => "Being revised",
             FeatureProposalStatus.ReadyForFinalApproval => "Ready for final approval",
             FeatureProposalStatus.Approved => "Approved — queued to build",
             FeatureProposalStatus.Denied => "Denied",

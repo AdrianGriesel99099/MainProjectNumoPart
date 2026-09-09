@@ -58,6 +58,9 @@ most likely giving each provider's migrations its own assembly — is still open
 - Don't add abstractions, config options, or error handling for cases that can't happen here. Match
   the scope of the change to what's actually needed.
 - Commit messages explain why, not what — the diff already shows what changed.
+- **User-facing text never names Claude or AI** — not on a page, not in a changelog entry, not in a
+  status badge. Describe what happens ("drafts a fuller write-up", "queued to build"), not what's
+  doing it. This is about copy a workshop user reads, not code comments or docs like this file.
 
 ## Verification standard
 
