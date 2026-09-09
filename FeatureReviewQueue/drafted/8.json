@@ -1,0 +1,4 @@
+{
+  "revisedDescription": "Add a way to select photos on a vehicle's page and export them as a PDF or a zip of JPEGs, each one carrying its stage, part, date, and comment thread, so staff can hand a client a clean set of photos without screenshotting or forwarding raw uploads. This is a download only, not an email sender — staff attach the file wherever they already message clients. When exporting, staff can choose whether to include the damage-mark pins burned onto the photo or just the plain image with its text comments.",
+  "readyForFinalApproval": true
+}
