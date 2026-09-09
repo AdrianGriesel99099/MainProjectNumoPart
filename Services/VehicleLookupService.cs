@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using MainProjectNumoPart.Data;
 using MainProjectNumoPart.Models;
 using Microsoft.Data.Sqlite;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 
 namespace MainProjectNumoPart.Services
@@ -118,12 +119,18 @@ namespace MainProjectNumoPart.Services
             }
         }
 
-        // Same SQLite extended error code Upload.cshtml.cs's IsSequenceConflict checks for its
-        // own unique-index race -- 2067 (SQLITE_CONSTRAINT_UNIQUE) specifically, not just the
-        // primary code (19), which also covers foreign-key/not-null/check violations a retry
-        // would not fix.
+        // This app uses SQLite locally and SQL Server in production (see Program.cs), and the
+        // provider-specific exception EF Core wraps in DbUpdateException differs accordingly --
+        // both need recognising here or this retry silently only works in dev, same gap
+        // Upload.cshtml.cs's IsSequenceConflict had for the sibling sequence-number race:
+        //   - SQLite: extended error code 2067 (SQLITE_CONSTRAINT_UNIQUE) specifically, not just
+        //     the primary code (19), which also covers foreign-key/not-null/check violations a
+        //     retry would not fix.
+        //   - SQL Server: Number 2627 (PRIMARY KEY/UNIQUE KEY constraint) or 2601 (duplicate key
+        //     row in a unique index), depending on how the index was declared.
         private static bool IsUniqueConstraintViolation(DbUpdateException ex) =>
-            ex.InnerException is SqliteException { SqliteExtendedErrorCode: 2067 };
+            ex.InnerException is SqliteException { SqliteExtendedErrorCode: 2067 }
+            || ex.InnerException is SqlException { Number: 2627 or 2601 };
 
         public async Task<Vehicle?> FindBySearchTermAsync(string term, CancellationToken ct = default)
         {
