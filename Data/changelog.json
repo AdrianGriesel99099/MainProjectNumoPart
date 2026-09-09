@@ -3,5 +3,35 @@
     "date": "2026-09-09",
     "title": "Feature added: fuzzy home-page search by fragment/make/model",
     "description": "Search now finds vehicles by partial VIN/Reg fragments and make/model substring (case-insensitive), with up to 25 results returned when multiple matches are found."
+  },
+  {
+    "date": "2026-09-09",
+    "title": "Feature ideas",
+    "description": "Suggest a new feature and help review it -- a fuller write-up gets drafted automatically for anything sent back for changes, and once you give final approval, it's queued up to be built."
+  },
+  {
+    "date": "2026-09-08",
+    "title": "Automatic daily backups",
+    "description": "Every photo is now backed up automatically each day to a separate, secure location -- with a tested way to restore production if anything ever goes wrong."
+  },
+  {
+    "date": "2026-09-08",
+    "title": "Simpler part picker",
+    "description": "Tagging a photo to a part is now one clean dropdown, everywhere -- faster and more reliable than the old visual picker."
+  },
+  {
+    "date": "2026-08-01",
+    "title": "Damage marking",
+    "description": "Click a part to record damage against it -- pin the exact spot on a real photo, or leave a note if there's no photo yet."
+  },
+  {
+    "date": "2026-08-01",
+    "title": "Job cards & photo comments",
+    "description": "Keep a running log of notes on a vehicle, and comment directly on individual photos."
+  },
+  {
+    "date": "2026-08-01",
+    "title": "Photo tagging & coverage map",
+    "description": "Tag photos to the exact part of the car they show, and see at a glance which parts still need photos."
   }
 ]

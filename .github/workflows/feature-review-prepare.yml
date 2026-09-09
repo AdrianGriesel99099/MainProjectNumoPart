@@ -1,0 +1,43 @@
+name: Feature review - prepare
+
+on:
+  schedule:
+    # 01:50 UTC = 03:50 SAST -- 10 minutes before the "Feature review" cloud routine (04:00 SAST)
+    # checks out the repo, so it reliably sees this run's commit.
+    - cron: '50 1 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      # Pure data relay, no reasoning -- see Tools/FeatureReviewRelay/Program.cs for why this is
+      # split from the routine itself (a cloud routine's sandbox has no network path to
+      # production at all, confirmed by testing; this workflow is the one side of the bridge that
+      # runs somewhere with normal internet access).
+      - name: Fetch pending reviews and queue approved proposals
+        env:
+          FEATURE_REVIEW_SITE_BASE_URL: https://ca-workshop-photos-prod.purplestone-16d8bd9f.southafricanorth.azurecontainerapps.io/
+          FEATURE_REVIEW_SITE_API_KEY: ${{ secrets.FEATURE_REVIEW_API_KEY }}
+          FEATURE_REVIEW_REPO_ROOT: ${{ github.workspace }}
+        run: dotnet run --project Tools/FeatureReviewRelay/FeatureReviewRelay.csproj -- prepare
+
+      - name: Commit queue files and any newly-queued proposals
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add FeatureReviewQueue docs/BACKLOG.md
+          if ! git diff --cached --quiet; then
+            git commit -m "Prepare feature-review queue for tonight's routine"
+            git push
+          else
+            echo "Nothing new to commit."
+          fi

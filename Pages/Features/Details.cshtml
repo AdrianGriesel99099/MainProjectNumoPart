@@ -1,0 +1,128 @@
+@* Pages/Features/Details.cshtml *@
+@page "{id:int}"
+@model MainProjectNumoPart.Pages.Features.DetailsModel
+@using MainProjectNumoPart.Models
+@using MainProjectNumoPart.Pages.Features
+@{
+    ViewData["Title"] = Model.Proposal?.Title ?? "Feature idea";
+    var proposal = Model.Proposal!;
+    var latestRound = proposal.Rounds.OrderByDescending(r => r.RoundNumber).First();
+    var awaitingDecision = proposal.Status == FeatureProposalStatus.NeedsReview || proposal.Status == FeatureProposalStatus.ReadyForFinalApproval;
+}
+
+<style>
+    /* See Index.cshtml for why this is a custom class rather than Bootstrap's unthemed .card. */
+    .feature-card {
+        background: var(--panel);
+        border: 1px solid var(--line-2);
+        border-radius: 4px;
+        padding: 1.25rem;
+    }
+</style>
+
+<p><a asp-page="Index">&larr; Feature ideas</a></p>
+
+<h2>@proposal.Title</h2>
+<p>
+    <span class="badge @StatusDisplay.BadgeClass(proposal.Status)">@StatusDisplay.Label(proposal.Status)</span>
+    <span class="text-muted ms-2">submitted by @proposal.SubmittedByEmail</span>
+</p>
+
+<div id="feature-proposal-error" class="alert alert-danger d-none"></div>
+
+@foreach (var round in proposal.Rounds.OrderBy(r => r.RoundNumber))
+{
+    var isLatestAwaitingDecision = round.Id == latestRound.Id && awaitingDecision;
+    <div class="feature-card mb-3">
+        <h6 class="text-muted mb-2">
+            @(round.RoundNumber == 0 ? "Original submission" : $"Round {round.RoundNumber} — revised write-up")
+        </h6>
+        <p class="mb-2">@(round.AiContent ?? proposal.Description)</p>
+
+        @foreach (var question in round.Questions.OrderBy(q => q.QuestionNumber))
+        {
+            <div class="mb-3">
+                <p class="mb-1 fw-semibold">@question.Prompt</p>
+                @if (isLatestAwaitingDecision)
+                {
+                    @foreach (var option in question.Options.OrderBy(o => o.OptionNumber))
+                    {
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="question-@question.Id"
+                                   id="option-@option.Id" value="@option.Id" data-question-id="@question.Id" />
+                            <label class="form-check-label" for="option-@option.Id">@option.Label</label>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <ul class="mb-0 small">
+                        @foreach (var option in question.Options.OrderBy(o => o.OptionNumber))
+                        {
+                            <li class="@(option.Id == question.SelectedOptionId ? "fw-semibold" : "text-muted")">
+                                @option.Label@(option.Id == question.SelectedOptionId ? " — selected" : "")
+                            </li>
+                        }
+                    </ul>
+                    @if (question.SelectedOptionId is null)
+                    {
+                        <p class="small text-muted mb-0 fst-italic">Not answered.</p>
+                    }
+                }
+            </div>
+        }
+
+        @if (round.HumanDecision is not null)
+        {
+            <p class="small text-muted mb-0">
+                @round.HumanDecision — @round.DecidedAtUtc?.ToString("d MMMM yyyy")
+                @if (!string.IsNullOrEmpty(round.HumanComment))
+                {
+                    <br /><span>&ldquo;@round.HumanComment&rdquo;</span>
+                }
+            </p>
+        }
+    </div>
+}
+
+@if (User.CanUpload() && awaitingDecision)
+{
+    var readyForFinal = proposal.Status == FeatureProposalStatus.ReadyForFinalApproval;
+    <div class="feature-card" style="max-width: 640px;">
+        <h5>Your decision</h5>
+        <div class="mb-3">
+            <label class="form-label" for="decision-comment">Comment (required if you're asking for changes)</label>
+            <textarea id="decision-comment" class="form-control" rows="3" maxlength="2000"></textarea>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <button type="button" class="btn btn-primary" data-decide="Accepted" data-proposal-id="@proposal.Id">
+                @(readyForFinal ? "Approve — build this" : "Looks good — continue")
+            </button>
+            <button type="button" class="btn btn-outline-secondary" data-decide="Revised" data-proposal-id="@proposal.Id">
+                Needs changes
+            </button>
+            <button type="button" class="btn btn-outline-warning" data-decide="TooComplex" data-proposal-id="@proposal.Id">
+                Too complex — simplify
+            </button>
+            <button type="button" class="btn btn-outline-danger" data-decide="Denied" data-proposal-id="@proposal.Id">
+                Reject idea
+            </button>
+        </div>
+    </div>
+}
+else if (User.CanUpload() && proposal.Status == FeatureProposalStatus.AwaitingAiRevision)
+{
+    @* No Accept/Revise here -- nothing's been drafted yet to react to. Denying is still always
+       available, so a proposal a reviewer regrets never sits unreachable until the next cycle. *@
+    <div class="feature-card" style="max-width: 640px;">
+        <h5>Your decision</h5>
+        <p class="text-muted small mb-3">A fuller write-up is being drafted for this — check back soon, or reject it now if you've changed your mind.</p>
+        <button type="button" class="btn btn-outline-danger" data-decide="Denied" data-proposal-id="@proposal.Id">
+            Reject idea
+        </button>
+    </div>
+}
+
+@section Scripts {
+    <script src="~/js/featureproposals.js" asp-append-version="true"></script>
+}

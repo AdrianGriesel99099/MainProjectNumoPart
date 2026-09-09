@@ -14,6 +14,21 @@
     <Compile Remove="MainProjectNumoPart.Tests/**" />
     <Content Remove="MainProjectNumoPart.Tests/**" />
     <None Remove="MainProjectNumoPart.Tests/**" />
+    <!-- Tools/FeatureReviewRelay is the same situation: its own console project living in a
+         subfolder of this one. Same exclusion, same reason. -->
+    <Compile Remove="Tools/**" />
+    <Content Remove="Tools/**" />
+    <None Remove="Tools/**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Data/*.json files are read at runtime from AppContext.BaseDirectory (see
+         Pages/Changelog.cshtml.cs), which is the PUBLISHED output directory, not the source
+         tree — unlike wwwroot/, arbitrary files elsewhere in the project are not copied there
+         automatically. Without this, the file exists in source and in git but 404s (silently,
+         since ChangelogModel treats "file missing" as a valid empty state) the moment this ships
+         inside the Docker image, which only contains published output. -->
+    <None Include="Data\changelog.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

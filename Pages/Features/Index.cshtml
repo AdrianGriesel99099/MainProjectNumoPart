@@ -1,0 +1,76 @@
+@* Pages/Features/Index.cshtml *@
+@page
+@model MainProjectNumoPart.Pages.Features.IndexModel
+@using MainProjectNumoPart.Pages.Features
+@{
+    ViewData["Title"] = "Feature ideas";
+}
+
+<style>
+    /* Bootstrap's .card is unthemed here (white bg, never overridden site-wide -- every other
+       "card"-shaped element in this app, e.g. .login-card, is a plain custom class instead), so a
+       raw .card would render near-invisible light-on-light text against this page's dark theme. */
+    .feature-card {
+        background: var(--panel);
+        border: 1px solid var(--line-2);
+        border-radius: 4px;
+        padding: 1.25rem;
+    }
+</style>
+
+<h2>Feature ideas</h2>
+<p class="text-muted">
+    Candidate features, reviewed here before the evening build picks one up. Every idea goes
+    through a round of review; accepting one sends it off for a fuller write-up, which comes
+    back for another look — repeating until it's either denied or given final approval.
+</p>
+
+<div id="feature-proposal-error" class="alert alert-danger d-none"></div>
+
+@if (User.CanUpload())
+{
+    <div class="feature-card mb-4" style="max-width: 640px;">
+        <h5>Add an idea</h5>
+        <form id="add-idea-form" class="row g-2">
+            <div class="col-12">
+                <label class="form-label" for="idea-title">Title</label>
+                <input id="idea-title" name="title" class="form-control" maxlength="150" required />
+            </div>
+            <div class="col-12">
+                <label class="form-label" for="idea-description">What should it do?</label>
+                <textarea id="idea-description" name="description" class="form-control" rows="3" maxlength="4000" required></textarea>
+            </div>
+            <div class="col-12">
+                <button type="submit" class="btn btn-primary">Submit idea</button>
+            </div>
+        </form>
+    </div>
+}
+
+<table class="table align-middle">
+    <thead>
+        <tr>
+            <th>Idea</th>
+            <th>Submitted by</th>
+            <th>Status</th>
+        </tr>
+    </thead>
+    <tbody>
+    @if (Model.Proposals.Count == 0)
+    {
+        <tr><td colspan="3" class="text-muted">No ideas yet.</td></tr>
+    }
+    @foreach (var proposal in Model.Proposals)
+    {
+        <tr>
+            <td><a asp-page="Details" asp-route-id="@proposal.Id">@proposal.Title</a></td>
+            <td class="text-muted">@proposal.SubmittedByEmail</td>
+            <td><span class="badge @StatusDisplay.BadgeClass(proposal.Status)">@StatusDisplay.Label(proposal.Status)</span></td>
+        </tr>
+    }
+    </tbody>
+</table>
+
+@section Scripts {
+    <script src="~/js/featureproposals.js" asp-append-version="true"></script>
+}

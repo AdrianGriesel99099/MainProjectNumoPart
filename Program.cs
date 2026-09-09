@@ -40,6 +40,7 @@ builder.Services.AddScoped<PhotoTaggingService>();
 builder.Services.AddScoped<VehicleUpdateService>();
 builder.Services.AddScoped<PhotoCommentService>();
 builder.Services.AddScoped<DamageMarkService>();
+builder.Services.AddScoped<FeatureProposalService>();
 
 // Minimal-API JSON defaults to reading enums as NUMBERS, so a body of {"part":"FrontBumper"}
 // is rejected with a 400 while {"part":null} succeeds — a split failure that is easy to miss.
@@ -190,6 +191,7 @@ app.MapRazorPages();
 
 app.MapPhotoEndpoints();
 app.MapVehicleEndpoints();
+app.MapFeatureProposalEndpoints();
 
 await AdminSeeder.SeedInitialAdminAsync(app.Services);
 
