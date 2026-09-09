@@ -154,5 +154,71 @@ namespace MainProjectNumoPart.Services
             _db.FeatureProposals
                 .Include(p => p.Rounds)
                 .FirstOrDefaultAsync(p => p.Id == id, ct);
+
+        // The four operations below are called by Tools/FeatureReviewBot (via
+        // Endpoints/FeatureProposalEndpoints.cs's API-key-gated /api/bot/... routes), not by the
+        // browser -- see CLAUDE.md's "Feature proposals & review" section for the full nightly
+        // workflow these support.
+
+        public Task<List<FeatureProposal>> ListAwaitingAiRevisionAsync(CancellationToken ct = default) =>
+            _db.FeatureProposals
+                .Include(p => p.Rounds)
+                .Where(p => p.Status == FeatureProposalStatus.AwaitingAiRevision)
+                .ToListAsync(ct);
+
+        public async Task<FeatureProposalDecisionResult> RecordAiRevisionAsync(
+            int proposalId, string revisedDescription, bool readyForFinalApproval, CancellationToken ct = default)
+        {
+            var proposal = await _db.FeatureProposals
+                .Include(p => p.Rounds)
+                .FirstOrDefaultAsync(p => p.Id == proposalId, ct);
+
+            if (proposal is null)
+            {
+                return new FeatureProposalDecisionResult(FeatureProposalDecisionStatus.NotFound);
+            }
+            if (proposal.Status != FeatureProposalStatus.AwaitingAiRevision)
+            {
+                return new FeatureProposalDecisionResult(FeatureProposalDecisionStatus.InvalidState,
+                    "This proposal isn't currently awaiting an AI revision.");
+            }
+
+            var nextRound = proposal.Rounds.Max(r => r.RoundNumber) + 1;
+            proposal.Rounds.Add(new FeatureProposalRound
+            {
+                RoundNumber = nextRound,
+                AiContent = revisedDescription,
+                CreatedAtUtc = DateTime.UtcNow
+            });
+            proposal.Status = readyForFinalApproval
+                ? FeatureProposalStatus.ReadyForFinalApproval
+                : FeatureProposalStatus.NeedsReview;
+
+            await _db.SaveChangesAsync(ct);
+
+            _logger.LogInformation("Feature proposal {ProposalId}: AI drafted round {Round}, ready-for-final={Ready}",
+                proposal.Id, nextRound, readyForFinalApproval);
+
+            return new FeatureProposalDecisionResult(FeatureProposalDecisionStatus.Success);
+        }
+
+        public Task<List<FeatureProposal>> ListApprovedUnqueuedAsync(CancellationToken ct = default) =>
+            _db.FeatureProposals
+                .Where(p => p.Status == FeatureProposalStatus.Approved && p.QueuedForBuildAtUtc == null)
+                .ToListAsync(ct);
+
+        public async Task<FeatureProposalDecisionResult> MarkQueuedForBuildAsync(int proposalId, CancellationToken ct = default)
+        {
+            var proposal = await _db.FeatureProposals.FirstOrDefaultAsync(p => p.Id == proposalId, ct);
+            if (proposal is null)
+            {
+                return new FeatureProposalDecisionResult(FeatureProposalDecisionStatus.NotFound);
+            }
+
+            proposal.QueuedForBuildAtUtc = DateTime.UtcNow;
+            await _db.SaveChangesAsync(ct);
+
+            return new FeatureProposalDecisionResult(FeatureProposalDecisionStatus.Success);
+        }
     }
 }

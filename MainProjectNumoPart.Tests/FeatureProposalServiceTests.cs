@@ -155,5 +155,86 @@ namespace MainProjectNumoPart.Tests
 
             Assert.Equal(FeatureProposalDecisionStatus.InvalidState, result.Status);
         }
+
+        [Fact]
+        public async Task ListAwaitingAiRevisionAsync_OnlyReturnsThatStatus()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var submit = await Build(db).SubmitAsync("Title", "Description", "submitter", "submitter@w.local");
+            await Build(db).SubmitAsync("Other", "Untouched", "submitter", "submitter@w.local");
+            await Build(db).DecideAsync(submit.ProposalId!.Value, FeatureReviewDecision.Accepted, null, "reviewer");
+
+            var pending = await Build(db).ListAwaitingAiRevisionAsync();
+
+            var pendingProposal = Assert.Single(pending);
+            Assert.Equal(submit.ProposalId, pendingProposal.Id);
+        }
+
+        [Fact]
+        public async Task RecordAiRevisionAsync_NotReadyForFinal_LandsOnNeedsReview()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var submit = await Build(db).SubmitAsync("Title", "Description", "submitter", "submitter@w.local");
+            await Build(db).DecideAsync(submit.ProposalId!.Value, FeatureReviewDecision.Accepted, null, "reviewer");
+
+            var result = await Build(db).RecordAiRevisionAsync(submit.ProposalId!.Value, "A fuller write-up.", readyForFinalApproval: false);
+
+            Assert.Equal(FeatureProposalDecisionStatus.Success, result.Status);
+            var proposal = db.FeatureProposals.Include(p => p.Rounds).Single();
+            Assert.Equal(FeatureProposalStatus.NeedsReview, proposal.Status);
+            var newRound = proposal.Rounds.Single(r => r.RoundNumber == 1);
+            Assert.Equal("A fuller write-up.", newRound.AiContent);
+        }
+
+        [Fact]
+        public async Task RecordAiRevisionAsync_ReadyForFinal_LandsOnReadyForFinalApproval()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var submit = await Build(db).SubmitAsync("Title", "Description", "submitter", "submitter@w.local");
+            await Build(db).DecideAsync(submit.ProposalId!.Value, FeatureReviewDecision.Accepted, null, "reviewer");
+
+            var result = await Build(db).RecordAiRevisionAsync(submit.ProposalId!.Value, "Fully specified.", readyForFinalApproval: true);
+
+            Assert.Equal(FeatureProposalDecisionStatus.Success, result.Status);
+            Assert.Equal(FeatureProposalStatus.ReadyForFinalApproval, db.FeatureProposals.Single().Status);
+        }
+
+        [Fact]
+        public async Task RecordAiRevisionAsync_RejectsAProposalNotAwaitingRevision()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var submit = await Build(db).SubmitAsync("Title", "Description", "submitter", "submitter@w.local");
+
+            var result = await Build(db).RecordAiRevisionAsync(submit.ProposalId!.Value, "Too early.", readyForFinalApproval: false);
+
+            Assert.Equal(FeatureProposalDecisionStatus.InvalidState, result.Status);
+        }
+
+        [Fact]
+        public async Task ListApprovedUnqueuedAsync_OnlyReturnsApprovedAndUnqueued()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var submit = await Build(db).SubmitAsync("Title", "Description", "submitter", "submitter@w.local");
+            var proposal = db.FeatureProposals.Single();
+            proposal.Status = FeatureProposalStatus.Approved;
+            db.SaveChanges();
+
+            var approved = await Build(db).ListApprovedUnqueuedAsync();
+            Assert.Single(approved);
+
+            await Build(db).MarkQueuedForBuildAsync(proposal.Id);
+
+            Assert.Empty(await Build(db).ListApprovedUnqueuedAsync());
+        }
+
+        [Fact]
+        public async Task MarkQueuedForBuildAsync_ReturnsNotFoundForUnknownProposal()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+
+            var result = await Build(db).MarkQueuedForBuildAsync(999);
+
+            Assert.Equal(FeatureProposalDecisionStatus.NotFound, result.Status);
+        }
     }
 }

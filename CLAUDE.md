@@ -116,9 +116,12 @@ git checkout; see the "Two migration histories" note above for why this database
 from a routine directly). The evening deploy routine's own prompt looks for `(proposal #<id>)` in a
 merged PR's title and, when present, sets that changelog entry's `link` to `/Features/<id>`.
 
-`Tools/FeatureReviewBot` needs `ANTHROPIC_API_KEY` and `AZURE_FEATURE_BOT_CLIENT_ID` (a dedicated
-App Registration, OIDC-federated the same way as the backup workflow's identity, holding a SQL
-Server contained-user grant scoped to exactly `dbo.FeatureProposals` and
-`dbo.FeatureProposalRounds` — no other table, no Storage access) as GitHub secrets. It connects via
-`AZURE_SQL_CONNECTION_STRING`'s `Authentication=Active Directory Default`, which reuses the az-cli
-session `azure/login` establishes in the workflow rather than storing a SQL credential anywhere.
+`Tools/FeatureReviewBot` has no database or Azure access of its own — it's a plain HTTP client
+authenticated with a shared API key against the site's own `/api/bot/feature-proposals/*` routes
+(`ApiKeyEndpointFilter`, checked against `FeatureReviewBot:ApiKey` — an env-injected Container App
+secret in production, deliberately outside `appsettings.json`), so every read/write flows through
+the same `FeatureProposalService` the web app itself uses rather than a second query path that
+could drift from it. Needs `ANTHROPIC_API_KEY` and `FEATURE_REVIEW_API_KEY` (must match the site's
+configured value) as GitHub secrets. Those bot routes are deliberately **not** gated by the
+Staff/Admin cookie auth every other route uses — there's no user for a script to sign in as — an
+unconfigured key on the site side rejects every request rather than silently allowing them through.

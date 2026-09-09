@@ -12,10 +12,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-      # Required for OIDC: lets the runner mint the short-lived token that azure/login exchanges
-      # for an Azure access token. Without it the login step fails with a missing-token error
-      # rather than an auth error, which is a confusing way to find out.
-      id-token: write
     steps:
       - uses: actions/checkout@v4
 
@@ -23,24 +19,14 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      # A dedicated App Registration (github-feature-review-bot), same reasoning as the backup
-      # workflow's own separate identity: this one's blast radius is scoped to exactly two
-      # database tables (see the SQL grant this identity was given), and can't touch the
-      # Container App, blob storage, or the deploy pipeline even if compromised.
-      - name: Azure login
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZURE_FEATURE_BOT_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-      # Tools/FeatureReviewBot reuses AppDbContext directly (project reference into the main
-      # app) so its schema knowledge can never drift from the real one. The connection string's
-      # "Authentication=Active Directory Default" makes Microsoft.Data.SqlClient reuse the az-cli
-      # session azure/login just established via OIDC -- no stored SQL credential anywhere.
+      # Tools/FeatureReviewBot has no database or Azure access of its own -- it authenticates to
+      # the site's own /api/bot/feature-proposals routes with a shared API key
+      # (ApiKeyEndpointFilter), so every read/write flows through the same FeatureProposalService
+      # the web app itself uses. No OIDC login step needed here, unlike the backup/deploy workflows.
       - name: Run the review bot
         env:
-          FEATURE_REVIEW_SQL_CONNECTION_STRING: ${{ secrets.AZURE_SQL_CONNECTION_STRING }}
+          FEATURE_REVIEW_SITE_BASE_URL: https://ca-workshop-photos-prod.purplestone-16d8bd9f.southafricanorth.azurecontainerapps.io/
+          FEATURE_REVIEW_SITE_API_KEY: ${{ secrets.FEATURE_REVIEW_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           FEATURE_REVIEW_REPO_ROOT: ${{ github.workspace }}
         run: dotnet run --project Tools/FeatureReviewBot/FeatureReviewBot.csproj

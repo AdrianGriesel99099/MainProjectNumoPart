@@ -8,15 +8,8 @@
     <RootNamespace>FeatureReviewBot</RootNamespace>
   </PropertyGroup>
 
-  <ItemGroup>
-    <!-- Project-referencing the main app rather than duplicating its schema: this tool reads and
-         writes FeatureProposal/FeatureProposalRound through the SAME AppDbContext/Models the web
-         app uses, so a future schema change only has to happen in one place. -->
-    <ProjectReference Include="..\..\MainProjectNumoPart.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="8.0.29" />
-  </ItemGroup>
+  <!-- No project or package references: this is a plain HTTP client (HttpClient and
+       System.Text.Json are both in the BCL) talking to the site's own /api/bot/feature-proposals
+       routes and to the Anthropic API, with no database access and no shared schema to sync. -->
 
 </Project>

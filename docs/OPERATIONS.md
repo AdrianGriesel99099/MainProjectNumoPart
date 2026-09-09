@@ -21,8 +21,9 @@ day's PRs pass tests and don't contain `MIGRATION NEEDED:` (see `CLAUDE.md` → 
 | 20:00 / 18:00 | Deploy today's changes | *(merges to master directly)* | Merges every approved, migration-clean PR from that day one at a time, watching each deploy before merging the next; also appends the day's shipped features to `Data/changelog.json` |
 
 Two GitHub Actions workflows run on their own schedules alongside these — "Photo backup" and
-"Feature proposal review" below. Unlike the cloud routines, both authenticate to real Azure
-resources via OIDC, each with its own narrowly-scoped identity.
+"Feature proposal review" below. Unlike the cloud routines, both can reach production directly:
+the backup workflow via its own narrowly-scoped Azure OIDC identity, the review workflow via a
+shared API key against the site's own API (see that section for why it doesn't use OIDC).
 
 ## Photo backup
 
@@ -87,25 +88,22 @@ in `CLAUDE.md` → "Feature proposals & review": it drafts the next revision for
 human sent back for changes, and queues every proposal a human gave final approval to into
 `docs/BACKLOG.md` for the feature-building routine to pick up.
 
-**What it touches, and what it doesn't.** It's the only automated process (cloud routine or
-workflow) that talks to the production database directly — everything else in this pipeline only
-ever sees a git checkout. `Tools/FeatureReviewBot` (a console app, project-referencing the main app
-so its schema knowledge can never drift from the real one) reads and writes exactly two tables:
-`FeatureProposals` and `FeatureProposalRounds`. It also calls the Anthropic API to draft each
-revision, and can push a single commit to `docs/BACKLOG.md` (nothing else) when something gets
-queued.
+**What it touches, and what it doesn't.** Unlike the other two workflows on this page, it has no
+Azure credential at all and never talks to the database directly. `Tools/FeatureReviewBot` (a plain
+HTTP console app, no database driver, no Azure SDK) calls the production site's own
+`/api/bot/feature-proposals/*` routes — the same `FeatureProposalService` the web app itself uses,
+so this workflow can never see or touch anything that service doesn't already expose. It also calls
+the Anthropic API to draft each revision, and can push a single commit to `docs/BACKLOG.md`
+(nothing else) when something gets queued.
 
-**Identity.** OIDC as its own App Registration, `github-feature-review-bot`, same reasoning as the
-backup identity above — a compromised or misconfigured credential here can read/write two tables and
-push a docs-only commit, nothing more. Unlike the backup identity it holds no Azure RBAC role at
-all; instead it's a SQL Server contained database user (`CREATE USER ... FROM EXTERNAL PROVIDER`)
-granted `SELECT, INSERT, UPDATE` on just those two tables — no access to `Vehicles`, `Photos`, or
-any other table in `sqldb-workshop-photos-prod`. Both federated-credential subject formats are
-registered, same as the backup identity (see that section above for why both are needed).
-`AZURE_FEATURE_BOT_CLIENT_ID` (its app id), `AZURE_SQL_CONNECTION_STRING` (server/database only, no
-credential — auth is `Authentication=Active Directory Default`, which reuses the az-cli session
-`azure/login` establishes in the same job), and `ANTHROPIC_API_KEY` are repo secrets.
-`AZURE_TENANT_ID`/`AZURE_SUBSCRIPTION_ID` are shared with the other two workflows.
+**Authentication.** A shared secret, not OIDC — there's no Azure resource for this workflow to
+authenticate to. `FEATURE_REVIEW_API_KEY` (repo secret) is sent as an `X-Api-Key` header on every
+request; the site checks it against `FeatureReviewBot:ApiKey`, injected into the Container App as
+an environment variable from a Container App secret (`az containerapp secret set`), never checked
+into `appsettings.json`. `ApiKeyEndpointFilter` (`Authorization/ApiKeyEndpointFilter.cs`) rejects
+every request outright if that value isn't configured, rather than falling open. `ANTHROPIC_API_KEY`
+is also a repo secret. Rotating the key means updating it in both places — the GitHub secret and
+the Container App secret — since a mismatch just fails closed (401), not silently.
 
 **Checking it's actually working.** Same habit as the backup workflow: trigger it manually via
 `workflow_dispatch` after first setting it up or after any change, and read the "Run the review
