@@ -1,5 +1,10 @@
 [
   {
+    "date": "2026-09-09",
+    "title": "Feature ideas",
+    "description": "Suggest a new feature and help review it -- Claude drafts a fuller write-up for anything sent back for changes, and once you give final approval, it's queued up to be built."
+  },
+  {
     "date": "2026-09-08",
     "title": "Automatic daily backups",
     "description": "Every photo is now backed up automatically each day to a separate, secure location -- with a tested way to restore production if anything ever goes wrong."
