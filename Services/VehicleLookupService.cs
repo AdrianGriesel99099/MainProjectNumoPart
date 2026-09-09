@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using MainProjectNumoPart.Data;
 using MainProjectNumoPart.Models;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 
 namespace MainProjectNumoPart.Services
@@ -92,6 +93,37 @@ namespace MainProjectNumoPart.Services
             _db.Vehicles.Add(vehicle);
             return vehicle;
         }
+
+        // Commits the Vehicle FindOrCreateAsync just resolved. FindOrCreateAsync's own lookup and
+        // this save are two separate round-trips, so two concurrent uploads for the same
+        // brand-new VIN/Reg can both see "nothing exists yet", both construct a new Vehicle, and
+        // then race to commit it -- the loser hits the unique index on Vin/Reg (see
+        // AppDbContext.OnModelCreating). That's the same class of race Upload.cshtml.cs's photo
+        // sequence-number retry already guards against, just one step earlier in the same flow.
+        // Recovery is a single retry, not a loop: once the winner has committed, this attempt's
+        // own re-resolve is guaranteed to find that row rather than attempt another insert.
+        public async Task<Vehicle> SaveWithRetryAsync(Vehicle vehicle, string? vin, string? reg, CancellationToken ct = default)
+        {
+            try
+            {
+                await _db.SaveChangesAsync(ct);
+                return vehicle;
+            }
+            catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
+            {
+                _db.ChangeTracker.Clear(); // discard this attempt's losing, unsaved insert
+                var resolved = await FindOrCreateAsync(vin, reg, ct);
+                await _db.SaveChangesAsync(ct);
+                return resolved;
+            }
+        }
+
+        // Same SQLite extended error code Upload.cshtml.cs's IsSequenceConflict checks for its
+        // own unique-index race -- 2067 (SQLITE_CONSTRAINT_UNIQUE) specifically, not just the
+        // primary code (19), which also covers foreign-key/not-null/check violations a retry
+        // would not fix.
+        private static bool IsUniqueConstraintViolation(DbUpdateException ex) =>
+            ex.InnerException is SqliteException { SqliteExtendedErrorCode: 2067 };
 
         public async Task<Vehicle?> FindBySearchTermAsync(string term, CancellationToken ct = default)
         {
