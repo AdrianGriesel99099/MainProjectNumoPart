@@ -48,10 +48,18 @@
                 }
             }
 
+            // Answering a question is optional, same as the comment -- only checked radios are
+            // sent. One radio group per question (name="question-<id>"), value is the option id.
+            const answers = Array.from(document.querySelectorAll('input[type=radio][data-question-id]:checked'))
+                .map((input) => ({
+                    questionId: parseInt(input.dataset.questionId, 10),
+                    selectedOptionId: parseInt(input.value, 10)
+                }));
+
             const response = await fetch(`/api/feature-proposals/${id}/decide`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ decision, comment })
+                body: JSON.stringify({ decision, comment, answers })
             });
 
             if (response.ok) {

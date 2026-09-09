@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -105,7 +106,12 @@ static async Task ApplyAsync(HttpClient site, string draftedDir)
 
             var response = await site.PostAsJsonAsync(
                 $"api/bot/feature-proposals/{id}/revision",
-                new { revisedDescription = draft.RevisedDescription, readyForFinalApproval = draft.ReadyForFinalApproval });
+                new
+                {
+                    revisedDescription = draft.RevisedDescription,
+                    readyForFinalApproval = draft.ReadyForFinalApproval,
+                    questions = draft.Questions?.Select(q => new { prompt = q.Prompt, options = q.Options })
+                });
             response.EnsureSuccessStatusCode();
 
             File.Delete(file);
@@ -121,11 +127,22 @@ static async Task ApplyAsync(HttpClient site, string draftedDir)
 
 static string SingleLine(string text) => text.Replace('\r', ' ').Replace('\n', ' ').Trim();
 
+record BotOptionView(
+    [property: JsonPropertyName("id")] int Id,
+    [property: JsonPropertyName("label")] string Label);
+
+record BotQuestionView(
+    [property: JsonPropertyName("id")] int Id,
+    [property: JsonPropertyName("prompt")] string Prompt,
+    [property: JsonPropertyName("options")] List<BotOptionView> Options,
+    [property: JsonPropertyName("selectedOption")] string? SelectedOption);
+
 record BotRound(
     [property: JsonPropertyName("roundNumber")] int RoundNumber,
     [property: JsonPropertyName("aiContent")] string? AiContent,
     [property: JsonPropertyName("humanDecision")] string? HumanDecision,
-    [property: JsonPropertyName("humanComment")] string? HumanComment);
+    [property: JsonPropertyName("humanComment")] string? HumanComment,
+    [property: JsonPropertyName("questions")] List<BotQuestionView> Questions);
 
 record BotProposal(
     [property: JsonPropertyName("id")] int Id,
@@ -138,7 +155,14 @@ record BotApprovedProposal(
     [property: JsonPropertyName("title")] string Title,
     [property: JsonPropertyName("description")] string Description);
 
-// The shape the routine itself writes under FeatureReviewQueue/drafted/{id}.json.
+// The shape the routine itself writes under FeatureReviewQueue/drafted/{id}.json. Questions is
+// optional -- most rounds won't have any (see CLAUDE.md: only drafted when there's a genuine
+// fork worth putting to the reviewer directly).
+record DraftedQuestion(
+    [property: JsonPropertyName("prompt")] string Prompt,
+    [property: JsonPropertyName("options")] List<string> Options);
+
 record DraftedRevision(
     [property: JsonPropertyName("revisedDescription")] string RevisedDescription,
-    [property: JsonPropertyName("readyForFinalApproval")] bool ReadyForFinalApproval);
+    [property: JsonPropertyName("readyForFinalApproval")] bool ReadyForFinalApproval,
+    [property: JsonPropertyName("questions")] List<DraftedQuestion>? Questions = null);

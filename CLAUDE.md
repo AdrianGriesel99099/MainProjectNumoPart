@@ -115,6 +115,10 @@ submit an idea at `/Features`; the state machine (`Services/FeatureProposalServi
 `Models/FeatureProposalStatus.cs`) is: `NeedsReview` (awaiting a human decision, whether that's the
 raw submission or a round Claude just revised) → human picks **Looks good — continue** / **Needs
 changes** (comment required) / **Reject idea** → `AwaitingAiRevision` or `Denied` (terminal).
+**Reject idea is always available**, even while `AwaitingAiRevision` — a reviewer can stop a
+proposal any time rather than being locked out until the next cycle drafts something; Accept/Revise
+only make sense once there's an actual round to react to. Denying mid-revision doesn't overwrite
+the round that got it there — that round's own Accept/Revise decision stays in the history.
 **A cloud routine cannot reach the site at all.** Confirmed by testing (2026-09-09): the routine
 sandbox's egress proxy rejects any outbound connection outside a fixed allowlist (Anthropic's own
 API, GitHub, package registries) with a 403 — not an auth problem, a network one, and not something
@@ -153,3 +157,19 @@ the routine's `readyForFinalApproval` decision. Only from `ReadyForFinalApproval
 (`NeedsReview`) just sends it around for another round. The evening deploy routine's own prompt
 looks for `(proposal #<id>)` in a merged PR's title and, when present, sets that changelog entry's
 `link` to `/Features/<id>`.
+
+**Questions (`FeatureProposalQuestion`/`FeatureProposalQuestionOption`).** Alongside a round's
+write-up, the routine can optionally draft one or more multiple-choice questions when there's a
+genuine fork it can't confidently resolve itself — each with 2-4 short options. These sit *next to*
+the plain comment box on `/Features/{id}`, never instead of it: answering is optional, same as the
+comment, and the reviewer can always just use the comment regardless. Most rounds have none. A
+question belongs to the round that drafted it; `SelectedOptionId` stays null until answered, and
+`DecideAsync` only accepts an answer that actually belongs to the *latest* round's own questions
+(anything else — a stale or tampered request — is rejected as `InvalidAnswer`, not silently
+ignored). `AppDbContext` explicitly sets `Question.SelectedOptionId`'s FK to `Restrict`, not
+`Cascade` — Options already cascade from Question, so a second DB-level cascade path onto the same
+table is exactly the problem `DamageMark.PhotoId` hit earlier (see that migration's comment); this
+one avoids it the same way. `Tools/FeatureReviewRelay` carries questions both directions: the site's
+bot API includes each round's questions (with option labels and the selected one, if any) in
+`GET /awaiting-ai-revision`, and the routine's own `drafted/<id>.json` can include a `questions`
+array the apply step relays straight through to `POST /revision`.

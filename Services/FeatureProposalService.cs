@@ -25,10 +25,17 @@ namespace MainProjectNumoPart.Services
         Success,
         NotFound,
         InvalidState,
-        CommentRequired
+        CommentRequired,
+        InvalidAnswer
     }
 
     public record FeatureProposalDecisionResult(FeatureProposalDecisionStatus Status, string? Message = null);
+
+    // A question drafted alongside a round's revision, with the reviewer's chosen option (if
+    // they answered it). Used both for submitting an answer (DecideAsync) and for drafting a new
+    // one (RecordAiRevisionAsync) -- Options carries plain label strings on the way in.
+    public record FeatureProposalQuestionInput(string Prompt, List<string> Options);
+    public record FeatureProposalAnswerInput(int QuestionId, int SelectedOptionId);
 
     // The review/approval state machine described in CLAUDE.md's "Feature proposals & review"
     // section. Every round's HumanDecision is set here, never trusted from the client beyond which
@@ -94,10 +101,11 @@ namespace MainProjectNumoPart.Services
         }
 
         public async Task<FeatureProposalDecisionResult> DecideAsync(
-            int proposalId, FeatureReviewDecision decision, string? comment, string userId, CancellationToken ct = default)
+            int proposalId, FeatureReviewDecision decision, string? comment, string userId,
+            IReadOnlyList<FeatureProposalAnswerInput>? answers = null, CancellationToken ct = default)
         {
             var proposal = await _db.FeatureProposals
-                .Include(p => p.Rounds)
+                .Include(p => p.Rounds).ThenInclude(r => r.Questions).ThenInclude(q => q.Options)
                 .FirstOrDefaultAsync(p => p.Id == proposalId, ct);
 
             if (proposal is null)
@@ -134,13 +142,32 @@ namespace MainProjectNumoPart.Services
                     $"Comments are limited to {MaxCommentLength} characters.");
             }
 
-            // Only record the decision on the latest round when that round is actually the one
-            // awaiting it. Denying while AwaitingAiRevision means the latest round's own
-            // Accept/Revise decision already happened -- overwriting it would erase that history
-            // for no benefit; the status change to Denied is the record in that case.
+            // Only record the decision (and any question answers) on the latest round when that
+            // round is actually the one awaiting it. Denying while AwaitingAiRevision means the
+            // latest round's own Accept/Revise decision already happened -- overwriting it would
+            // erase that history for no benefit; the status change to Denied is the record then.
             if (awaitingDecision)
             {
                 var latestRound = proposal.Rounds.OrderByDescending(r => r.RoundNumber).First();
+
+                // Answering is optional, same as the comment -- but an answer that doesn't
+                // actually belong to this round's own questions is rejected outright rather than
+                // silently ignored, since that can only mean a stale or tampered request.
+                if (answers is { Count: > 0 })
+                {
+                    foreach (var answer in answers)
+                    {
+                        var question = latestRound.Questions.FirstOrDefault(q => q.Id == answer.QuestionId);
+                        var option = question?.Options.FirstOrDefault(o => o.Id == answer.SelectedOptionId);
+                        if (question is null || option is null)
+                        {
+                            return new FeatureProposalDecisionResult(FeatureProposalDecisionStatus.InvalidAnswer,
+                                "That answer doesn't match a question on this round.");
+                        }
+                        question.SelectedOptionId = option.Id;
+                    }
+                }
+
                 latestRound.HumanDecision = decision;
                 latestRound.HumanComment = string.IsNullOrEmpty(trimmedComment) ? null : trimmedComment;
                 latestRound.DecidedByUserId = userId;
@@ -170,22 +197,23 @@ namespace MainProjectNumoPart.Services
 
         public Task<FeatureProposal?> GetWithRoundsAsync(int id, CancellationToken ct = default) =>
             _db.FeatureProposals
-                .Include(p => p.Rounds)
+                .Include(p => p.Rounds).ThenInclude(r => r.Questions).ThenInclude(q => q.Options)
                 .FirstOrDefaultAsync(p => p.Id == id, ct);
 
-        // The four operations below are called by Tools/FeatureReviewBot (via
+        // The operations below are called by Tools/FeatureReviewRelay (via
         // Endpoints/FeatureProposalEndpoints.cs's API-key-gated /api/bot/... routes), not by the
         // browser -- see CLAUDE.md's "Feature proposals & review" section for the full nightly
         // workflow these support.
 
         public Task<List<FeatureProposal>> ListAwaitingAiRevisionAsync(CancellationToken ct = default) =>
             _db.FeatureProposals
-                .Include(p => p.Rounds)
+                .Include(p => p.Rounds).ThenInclude(r => r.Questions).ThenInclude(q => q.Options)
                 .Where(p => p.Status == FeatureProposalStatus.AwaitingAiRevision)
                 .ToListAsync(ct);
 
         public async Task<FeatureProposalDecisionResult> RecordAiRevisionAsync(
-            int proposalId, string revisedDescription, bool readyForFinalApproval, CancellationToken ct = default)
+            int proposalId, string revisedDescription, bool readyForFinalApproval,
+            IReadOnlyList<FeatureProposalQuestionInput>? questions = null, CancellationToken ct = default)
         {
             var proposal = await _db.FeatureProposals
                 .Include(p => p.Rounds)
@@ -202,20 +230,42 @@ namespace MainProjectNumoPart.Services
             }
 
             var nextRound = proposal.Rounds.Max(r => r.RoundNumber) + 1;
-            proposal.Rounds.Add(new FeatureProposalRound
+            var round = new FeatureProposalRound
             {
                 RoundNumber = nextRound,
                 AiContent = revisedDescription,
                 CreatedAtUtc = DateTime.UtcNow
-            });
+            };
+
+            var questionNumber = 0;
+            foreach (var question in questions ?? Array.Empty<FeatureProposalQuestionInput>())
+            {
+                var questionEntity = new FeatureProposalQuestion
+                {
+                    QuestionNumber = questionNumber++,
+                    Prompt = question.Prompt
+                };
+                var optionNumber = 0;
+                foreach (var optionLabel in question.Options)
+                {
+                    questionEntity.Options.Add(new FeatureProposalQuestionOption
+                    {
+                        OptionNumber = optionNumber++,
+                        Label = optionLabel
+                    });
+                }
+                round.Questions.Add(questionEntity);
+            }
+
+            proposal.Rounds.Add(round);
             proposal.Status = readyForFinalApproval
                 ? FeatureProposalStatus.ReadyForFinalApproval
                 : FeatureProposalStatus.NeedsReview;
 
             await _db.SaveChangesAsync(ct);
 
-            _logger.LogInformation("Feature proposal {ProposalId}: AI drafted round {Round}, ready-for-final={Ready}",
-                proposal.Id, nextRound, readyForFinalApproval);
+            _logger.LogInformation("Feature proposal {ProposalId}: AI drafted round {Round} with {QuestionCount} question(s), ready-for-final={Ready}",
+                proposal.Id, nextRound, round.Questions.Count, readyForFinalApproval);
 
             return new FeatureProposalDecisionResult(FeatureProposalDecisionStatus.Success);
         }

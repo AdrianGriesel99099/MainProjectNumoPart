@@ -8,12 +8,16 @@ namespace MainProjectNumoPart.Endpoints
     public static class FeatureProposalEndpoints
     {
         public record SubmitProposalRequest(string? Title, string? Description);
-        public record DecideProposalRequest(FeatureReviewDecision Decision, string? Comment);
+        public record AnswerRequest(int QuestionId, int SelectedOptionId);
+        public record DecideProposalRequest(FeatureReviewDecision Decision, string? Comment, List<AnswerRequest>? Answers = null);
 
-        public record BotRoundView(int RoundNumber, string? AiContent, FeatureReviewDecision? HumanDecision, string? HumanComment);
+        public record BotOptionView(int Id, string Label);
+        public record BotQuestionView(int Id, string Prompt, List<BotOptionView> Options, string? SelectedOption);
+        public record BotRoundView(int RoundNumber, string? AiContent, FeatureReviewDecision? HumanDecision, string? HumanComment, List<BotQuestionView> Questions);
         public record BotProposalView(int Id, string Title, string Description, List<BotRoundView> Rounds);
         public record BotApprovedProposalView(int Id, string Title, string Description);
-        public record RecordAiRevisionRequest(string RevisedDescription, bool ReadyForFinalApproval);
+        public record BotQuestionInput(string Prompt, List<string> Options);
+        public record RecordAiRevisionRequest(string RevisedDescription, bool ReadyForFinalApproval, List<BotQuestionInput>? Questions = null);
 
         // Both routes here need the same role bar (submitting or reviewing an idea is treated the
         // same as uploading -- see User.CanUpload() in _Layout.cshtml), so the group-level policy
@@ -52,7 +56,10 @@ namespace MainProjectNumoPart.Endpoints
                 if (body is null) return Results.BadRequest("No decision supplied.");
 
                 var userId = userManager.GetUserId(http.User)!;
-                var result = await proposals.DecideAsync(id, body.Decision, body.Comment, userId, ct);
+                var answers = body.Answers?
+                    .Select(a => new FeatureProposalAnswerInput(a.QuestionId, a.SelectedOptionId))
+                    .ToList();
+                var result = await proposals.DecideAsync(id, body.Decision, body.Comment, userId, answers, ct);
 
                 return result.Status switch
                 {
@@ -65,12 +72,13 @@ namespace MainProjectNumoPart.Endpoints
             MapBotEndpoints(app);
         }
 
-        // Called only by Tools/FeatureReviewBot (.github/workflows/feature-review.yml) -- a
-        // script with no user to sign in as, so this group is gated by a shared API key
-        // (ApiKeyEndpointFilter) instead of the cookie/role auth every other route in this app
-        // uses. Deliberately its own DTOs rather than serializing FeatureProposal/
-        // FeatureProposalRound directly: those have a circular Round->Proposal reference and
-        // carry internal-only fields (SubmittedByUserId etc.) this caller has no use for.
+        // Called only by Tools/FeatureReviewRelay (.github/workflows/feature-review-prepare.yml
+        // and feature-review-apply.yml) -- a script with no user to sign in as, so this group is
+        // gated by a shared API key (ApiKeyEndpointFilter) instead of the cookie/role auth every
+        // other route in this app uses. Deliberately its own DTOs rather than serializing
+        // FeatureProposal/FeatureProposalRound directly: those have a circular Round->Proposal
+        // reference and carry internal-only fields (SubmittedByUserId etc.) this caller has no
+        // use for.
         private static void MapBotEndpoints(WebApplication app)
         {
             var group = app.MapGroup("/api/bot/feature-proposals")
@@ -82,7 +90,16 @@ namespace MainProjectNumoPart.Endpoints
                 return Results.Ok(pending.Select(p => new BotProposalView(
                     p.Id, p.Title, p.Description,
                     p.Rounds.OrderBy(r => r.RoundNumber)
-                        .Select(r => new BotRoundView(r.RoundNumber, r.AiContent, r.HumanDecision, r.HumanComment))
+                        .Select(r => new BotRoundView(
+                            r.RoundNumber, r.AiContent, r.HumanDecision, r.HumanComment,
+                            r.Questions.OrderBy(q => q.QuestionNumber)
+                                .Select(q => new BotQuestionView(
+                                    q.Id, q.Prompt,
+                                    q.Options.OrderBy(o => o.OptionNumber)
+                                        .Select(o => new BotOptionView(o.Id, o.Label))
+                                        .ToList(),
+                                    q.Options.FirstOrDefault(o => o.Id == q.SelectedOptionId)?.Label))
+                                .ToList()))
                         .ToList())));
             });
 
@@ -94,7 +111,10 @@ namespace MainProjectNumoPart.Endpoints
             {
                 if (body is null) return Results.BadRequest("No revision supplied.");
 
-                var result = await proposals.RecordAiRevisionAsync(id, body.RevisedDescription, body.ReadyForFinalApproval, ct);
+                var questions = body.Questions?
+                    .Select(q => new FeatureProposalQuestionInput(q.Prompt, q.Options))
+                    .ToList();
+                var result = await proposals.RecordAiRevisionAsync(id, body.RevisedDescription, body.ReadyForFinalApproval, questions, ct);
 
                 return result.Status switch
                 {

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using MainProjectNumoPart.Models;
@@ -247,6 +248,67 @@ namespace MainProjectNumoPart.Tests
             var result = await Build(db).RecordAiRevisionAsync(submit.ProposalId!.Value, "Too early.", readyForFinalApproval: false);
 
             Assert.Equal(FeatureProposalDecisionStatus.InvalidState, result.Status);
+        }
+
+        [Fact]
+        public async Task RecordAiRevisionAsync_CanIncludeQuestionsWithOptions()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var submit = await Build(db).SubmitAsync("Title", "Description", "submitter", "submitter@w.local");
+            await Build(db).DecideAsync(submit.ProposalId!.Value, FeatureReviewDecision.Accepted, null, "reviewer");
+
+            var questions = new List<FeatureProposalQuestionInput>
+            {
+                new("Should exports be a zip or individual downloads?", new List<string> { "Zip", "Individual downloads", "Both" })
+            };
+            var result = await Build(db).RecordAiRevisionAsync(submit.ProposalId!.Value, "A fuller write-up.", false, questions);
+
+            Assert.Equal(FeatureProposalDecisionStatus.Success, result.Status);
+            var round = db.FeatureProposals.Include(p => p.Rounds).ThenInclude(r => r.Questions).ThenInclude(q => q.Options)
+                .Single().Rounds.Single(r => r.RoundNumber == 1);
+            var question = Assert.Single(round.Questions);
+            Assert.Equal("Should exports be a zip or individual downloads?", question.Prompt);
+            Assert.Equal(new[] { "Zip", "Individual downloads", "Both" }, question.Options.OrderBy(o => o.OptionNumber).Select(o => o.Label));
+        }
+
+        [Fact]
+        public async Task DecideAsync_CanAnswerAQuestionOnTheLatestRound()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var submit = await Build(db).SubmitAsync("Title", "Description", "submitter", "submitter@w.local");
+            await Build(db).DecideAsync(submit.ProposalId!.Value, FeatureReviewDecision.Accepted, null, "reviewer");
+            var questions = new List<FeatureProposalQuestionInput> { new("Zip or individual?", new List<string> { "Zip", "Individual" }) };
+            await Build(db).RecordAiRevisionAsync(submit.ProposalId!.Value, "Fuller write-up.", true, questions);
+
+            var question = db.FeatureProposalQuestions.Include(q => q.Options).Single();
+            var zipOption = question.Options.Single(o => o.Label == "Zip");
+            var answers = new List<FeatureProposalAnswerInput> { new(question.Id, zipOption.Id) };
+
+            var result = await Build(db).DecideAsync(submit.ProposalId!.Value, FeatureReviewDecision.Accepted, null, "reviewer", answers);
+
+            Assert.Equal(FeatureProposalDecisionStatus.Success, result.Status);
+            Assert.Equal(zipOption.Id, db.FeatureProposalQuestions.Single().SelectedOptionId);
+        }
+
+        [Fact]
+        public async Task DecideAsync_RejectsAnAnswerToAQuestionFromAnotherRound()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var submit = await Build(db).SubmitAsync("Title", "Description", "submitter", "submitter@w.local");
+            await Build(db).DecideAsync(submit.ProposalId!.Value, FeatureReviewDecision.Accepted, null, "reviewer");
+            var questions = new List<FeatureProposalQuestionInput> { new("Zip or individual?", new List<string> { "Zip", "Individual" }) };
+            await Build(db).RecordAiRevisionAsync(submit.ProposalId!.Value, "Fuller write-up.", false, questions);
+            // Send it around for a second AI pass -- the round with the question is no longer latest.
+            await Build(db).DecideAsync(submit.ProposalId!.Value, FeatureReviewDecision.Revised, "More detail.", "reviewer");
+            await Build(db).RecordAiRevisionAsync(submit.ProposalId!.Value, "Even fuller write-up.", true);
+
+            var staleQuestion = db.FeatureProposalQuestions.Include(q => q.Options).Single();
+            var staleOption = staleQuestion.Options.First();
+            var answers = new List<FeatureProposalAnswerInput> { new(staleQuestion.Id, staleOption.Id) };
+
+            var result = await Build(db).DecideAsync(submit.ProposalId!.Value, FeatureReviewDecision.Accepted, null, "reviewer", answers);
+
+            Assert.Equal(FeatureProposalDecisionStatus.InvalidAnswer, result.Status);
         }
 
         [Fact]

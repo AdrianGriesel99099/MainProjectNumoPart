@@ -6,6 +6,8 @@
 @{
     ViewData["Title"] = Model.Proposal?.Title ?? "Feature idea";
     var proposal = Model.Proposal!;
+    var latestRound = proposal.Rounds.OrderByDescending(r => r.RoundNumber).First();
+    var awaitingDecision = proposal.Status == FeatureProposalStatus.NeedsReview || proposal.Status == FeatureProposalStatus.ReadyForFinalApproval;
 }
 
 <style>
@@ -30,11 +32,45 @@
 
 @foreach (var round in proposal.Rounds.OrderBy(r => r.RoundNumber))
 {
+    var isLatestAwaitingDecision = round.Id == latestRound.Id && awaitingDecision;
     <div class="feature-card mb-3">
         <h6 class="text-muted mb-2">
             @(round.RoundNumber == 0 ? "Original submission" : $"Round {round.RoundNumber} — revised write-up")
         </h6>
         <p class="mb-2">@(round.AiContent ?? proposal.Description)</p>
+
+        @foreach (var question in round.Questions.OrderBy(q => q.QuestionNumber))
+        {
+            <div class="mb-3">
+                <p class="mb-1 fw-semibold">@question.Prompt</p>
+                @if (isLatestAwaitingDecision)
+                {
+                    @foreach (var option in question.Options.OrderBy(o => o.OptionNumber))
+                    {
+                        <div class="form-check">
+                            <input class="form-check-input" type="radio" name="question-@question.Id"
+                                   id="option-@option.Id" value="@option.Id" data-question-id="@question.Id" />
+                            <label class="form-check-label" for="option-@option.Id">@option.Label</label>
+                        </div>
+                    }
+                }
+                else
+                {
+                    <ul class="mb-0 small">
+                        @foreach (var option in question.Options.OrderBy(o => o.OptionNumber))
+                        {
+                            <li class="@(option.Id == question.SelectedOptionId ? "fw-semibold" : "text-muted")">
+                                @option.Label@(option.Id == question.SelectedOptionId ? " — selected" : "")
+                            </li>
+                        }
+                    </ul>
+                    @if (question.SelectedOptionId is null)
+                    {
+                        <p class="small text-muted mb-0 fst-italic">Not answered.</p>
+                    }
+                }
+            </div>
+        }
 
         @if (round.HumanDecision is not null)
         {
@@ -49,7 +85,7 @@
     </div>
 }
 
-@if (User.CanUpload() && (proposal.Status == FeatureProposalStatus.NeedsReview || proposal.Status == FeatureProposalStatus.ReadyForFinalApproval))
+@if (User.CanUpload() && awaitingDecision)
 {
     var readyForFinal = proposal.Status == FeatureProposalStatus.ReadyForFinalApproval;
     <div class="feature-card" style="max-width: 640px;">
