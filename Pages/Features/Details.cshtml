@@ -71,6 +71,18 @@
         </div>
     </div>
 }
+else if (User.CanUpload() && proposal.Status == FeatureProposalStatus.AwaitingAiRevision)
+{
+    @* No Accept/Revise here -- nothing's been drafted yet to react to. Denying is still always
+       available, so a proposal a reviewer regrets never sits unreachable until the next cycle. *@
+    <div class="feature-card" style="max-width: 640px;">
+        <h5>Your decision</h5>
+        <p class="text-muted small mb-3">A fuller write-up is being drafted for this — check back soon, or reject it now if you've changed your mind.</p>
+        <button type="button" class="btn btn-outline-danger" data-decide="Denied" data-proposal-id="@proposal.Id">
+            Reject idea
+        </button>
+    </div>
+}
 
 @section Scripts {
     <script src="~/js/featureproposals.js" asp-append-version="true"></script>

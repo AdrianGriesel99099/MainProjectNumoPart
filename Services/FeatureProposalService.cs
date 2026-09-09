@@ -105,7 +105,18 @@ namespace MainProjectNumoPart.Services
                 return new FeatureProposalDecisionResult(FeatureProposalDecisionStatus.NotFound);
             }
 
-            if (proposal.Status != FeatureProposalStatus.NeedsReview && proposal.Status != FeatureProposalStatus.ReadyForFinalApproval)
+            if (proposal.Status == FeatureProposalStatus.Denied || proposal.Status == FeatureProposalStatus.Approved)
+            {
+                return new FeatureProposalDecisionResult(FeatureProposalDecisionStatus.InvalidState,
+                    "This proposal has already been decided.");
+            }
+
+            // Denying is always available, even mid-revision -- a human can stop a proposal any
+            // time, regardless of whether a round is currently being drafted for it. Accepting or
+            // asking for changes only makes sense once there's an actual round to react to.
+            var awaitingDecision = proposal.Status == FeatureProposalStatus.NeedsReview
+                || proposal.Status == FeatureProposalStatus.ReadyForFinalApproval;
+            if (decision != FeatureReviewDecision.Denied && !awaitingDecision)
             {
                 return new FeatureProposalDecisionResult(FeatureProposalDecisionStatus.InvalidState,
                     "This proposal isn't currently awaiting a decision.");
@@ -123,11 +134,18 @@ namespace MainProjectNumoPart.Services
                     $"Comments are limited to {MaxCommentLength} characters.");
             }
 
-            var latestRound = proposal.Rounds.OrderByDescending(r => r.RoundNumber).First();
-            latestRound.HumanDecision = decision;
-            latestRound.HumanComment = string.IsNullOrEmpty(trimmedComment) ? null : trimmedComment;
-            latestRound.DecidedByUserId = userId;
-            latestRound.DecidedAtUtc = DateTime.UtcNow;
+            // Only record the decision on the latest round when that round is actually the one
+            // awaiting it. Denying while AwaitingAiRevision means the latest round's own
+            // Accept/Revise decision already happened -- overwriting it would erase that history
+            // for no benefit; the status change to Denied is the record in that case.
+            if (awaitingDecision)
+            {
+                var latestRound = proposal.Rounds.OrderByDescending(r => r.RoundNumber).First();
+                latestRound.HumanDecision = decision;
+                latestRound.HumanComment = string.IsNullOrEmpty(trimmedComment) ? null : trimmedComment;
+                latestRound.DecidedByUserId = userId;
+                latestRound.DecidedAtUtc = DateTime.UtcNow;
+            }
 
             proposal.Status = decision switch
             {
@@ -141,8 +159,8 @@ namespace MainProjectNumoPart.Services
 
             await _db.SaveChangesAsync(ct);
 
-            _logger.LogInformation("Feature proposal {ProposalId} round {Round} decided {Decision} by {UserId} -> {Status}",
-                proposal.Id, latestRound.RoundNumber, decision, userId, proposal.Status);
+            _logger.LogInformation("Feature proposal {ProposalId} decided {Decision} by {UserId} -> {Status}",
+                proposal.Id, decision, userId, proposal.Status);
 
             return new FeatureProposalDecisionResult(FeatureProposalDecisionStatus.Success);
         }

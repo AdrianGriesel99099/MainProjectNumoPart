@@ -157,6 +157,45 @@ namespace MainProjectNumoPart.Tests
         }
 
         [Fact]
+        public async Task DecideAsync_DenyingWhileAwaitingAiRevision_IsAlwaysAllowed()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var submit = await Build(db).SubmitAsync("Title", "Description", "submitter", "submitter@w.local");
+            await Build(db).DecideAsync(submit.ProposalId!.Value, FeatureReviewDecision.Accepted, null, "reviewer");
+
+            var result = await Build(db).DecideAsync(submit.ProposalId!.Value, FeatureReviewDecision.Denied, null, "reviewer");
+
+            Assert.Equal(FeatureProposalDecisionStatus.Success, result.Status);
+            Assert.Equal(FeatureProposalStatus.Denied, db.FeatureProposals.Single().Status);
+        }
+
+        [Fact]
+        public async Task DecideAsync_DenyingWhileAwaitingAiRevision_DoesNotOverwriteTheRoundThatGotItThere()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var submit = await Build(db).SubmitAsync("Title", "Description", "submitter", "submitter@w.local");
+            await Build(db).DecideAsync(submit.ProposalId!.Value, FeatureReviewDecision.Revised, "Change the flow.", "reviewer");
+
+            await Build(db).DecideAsync(submit.ProposalId!.Value, FeatureReviewDecision.Denied, null, "someone-else");
+
+            var round0 = db.FeatureProposals.Include(p => p.Rounds).Single().Rounds.Single();
+            Assert.Equal(FeatureReviewDecision.Revised, round0.HumanDecision);
+            Assert.Equal("Change the flow.", round0.HumanComment);
+        }
+
+        [Fact]
+        public async Task DecideAsync_RevisingWhileAwaitingAiRevision_IsStillRejected()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var submit = await Build(db).SubmitAsync("Title", "Description", "submitter", "submitter@w.local");
+            await Build(db).DecideAsync(submit.ProposalId!.Value, FeatureReviewDecision.Accepted, null, "reviewer");
+
+            var result = await Build(db).DecideAsync(submit.ProposalId!.Value, FeatureReviewDecision.Revised, "More detail please.", "reviewer");
+
+            Assert.Equal(FeatureProposalDecisionStatus.InvalidState, result.Status);
+        }
+
+        [Fact]
         public async Task ListAwaitingAiRevisionAsync_OnlyReturnsThatStatus()
         {
             using var db = TestDbContextFactory.CreateInMemory();
