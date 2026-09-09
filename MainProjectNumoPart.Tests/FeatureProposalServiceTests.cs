@@ -123,6 +123,32 @@ namespace MainProjectNumoPart.Tests
         }
 
         [Fact]
+        public async Task DecideAsync_TooComplex_SendsItToAiRevisionWithoutRequiringAComment()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var submit = await Build(db).SubmitAsync("Title", "Description", "submitter", "submitter@w.local");
+
+            var result = await Build(db).DecideAsync(submit.ProposalId!.Value, FeatureReviewDecision.TooComplex, null, "reviewer");
+
+            Assert.Equal(FeatureProposalDecisionStatus.Success, result.Status);
+            var proposal = db.FeatureProposals.Include(p => p.Rounds).Single();
+            Assert.Equal(FeatureProposalStatus.AwaitingAiRevision, proposal.Status);
+            Assert.Equal(FeatureReviewDecision.TooComplex, proposal.Rounds.Single().HumanDecision);
+        }
+
+        [Fact]
+        public async Task DecideAsync_TooComplex_CanStillCarryAnOptionalComment()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var submit = await Build(db).SubmitAsync("Title", "Description", "submitter", "submitter@w.local");
+
+            await Build(db).DecideAsync(submit.ProposalId!.Value, FeatureReviewDecision.TooComplex, "Maybe just do the simple version first.", "reviewer");
+
+            Assert.Equal("Maybe just do the simple version first.",
+                db.FeatureProposals.Include(p => p.Rounds).Single().Rounds.Single().HumanComment);
+        }
+
+        [Fact]
         public async Task DecideAsync_Denied_IsTerminal()
         {
             using var db = TestDbContextFactory.CreateInMemory();

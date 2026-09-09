@@ -27,6 +27,10 @@ namespace MainProjectNumoPart.Pages
         public string? NotFoundMessage { get; set; }
         public System.Collections.Generic.List<Vehicle> RecentVehicles { get; set; } = new();
 
+        // Populated when a search matches no single vehicle exactly but does match several by
+        // fragment or make/model — see VehicleLookupService.FindManyBySearchTermAsync.
+        public System.Collections.Generic.List<Vehicle> SearchResults { get; set; } = new();
+
         public async Task<IActionResult> OnGetAsync()
         {
             if (!string.IsNullOrWhiteSpace(Search))
@@ -36,7 +40,20 @@ namespace MainProjectNumoPart.Pages
                 {
                     return RedirectToPage("/Vehicles/Details", new { id = vehicle.Id });
                 }
-                NotFoundMessage = $"No vehicle found matching \"{Search}\".";
+
+                var matches = await _vehicles.FindManyBySearchTermAsync(Search);
+                if (matches.Count == 1)
+                {
+                    return RedirectToPage("/Vehicles/Details", new { id = matches[0].Id });
+                }
+                if (matches.Count > 1)
+                {
+                    SearchResults = matches;
+                }
+                else
+                {
+                    NotFoundMessage = $"No vehicle found matching \"{Search}\".";
+                }
             }
 
             RecentVehicles = await _db.Vehicles

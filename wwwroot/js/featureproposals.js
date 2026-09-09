@@ -39,13 +39,14 @@
             const id = button.dataset.proposalId;
             let comment = null;
 
-            if (decision === 'Revised') {
+            if (decision === 'Revised' || decision === 'TooComplex') {
                 const commentBox = document.getElementById('decision-comment');
                 comment = commentBox ? commentBox.value.trim() : '';
-                if (!comment) {
+                if (decision === 'Revised' && !comment) {
                     showError('Say what should change before sending this back for another round.');
                     return;
                 }
+                if (!comment) comment = null;
             }
 
             // Answering a question is optional, same as the comment -- only checked radios are

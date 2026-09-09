@@ -21,5 +21,18 @@ namespace MainProjectNumoPart.Tests
             context.Database.EnsureCreated();
             return context;
         }
+
+        // A second context against the SAME open connection as an existing CreateInMemory()
+        // context, standing in for a concurrent request against the same production database --
+        // ":memory:" SQLite is scoped to the connection object itself, so a fresh connection
+        // string would just open an empty, unrelated database instead.
+        public static AppDbContext CreateSecondaryContext(AppDbContext primary)
+        {
+            var options = new DbContextOptionsBuilder<AppDbContext>()
+                .UseSqlite(primary.Database.GetDbConnection())
+                .Options;
+
+            return new AppDbContext(options);
+        }
     }
 }

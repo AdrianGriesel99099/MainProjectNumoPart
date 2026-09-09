@@ -136,15 +136,23 @@ namespace MainProjectNumoPart.Pages
                 // typo in the VIN must re-file the photos under the corrected vehicle, which is
                 // exactly what leaving the fields editable is for.
                 vehicle = await _vehicles.FindOrCreateAsync(Vin, Reg);
+                // Commits, assigning vehicle.Id before it's used in blob paths below. Two
+                // concurrent uploads for the same brand-new VIN/Reg can both reach this point
+                // having seen "nothing exists yet" — SaveWithRetryAsync is what turns the
+                // loser's unique-index violation into a transparent re-resolve instead of an
+                // unhandled 500.
+                vehicle = await _vehicles.SaveWithRetryAsync(vehicle, Vin, Reg);
             }
             catch (VehicleIdentifierConflictException ex)
             {
                 // VIN and Reg point at two different existing vehicles — almost always a typo.
-                // No blobs have been touched yet, so nothing to clean up here.
+                // (SaveWithRetryAsync's own re-resolve can theoretically throw this too, if a
+                // second concurrent request's create is what the retry collides with — same
+                // friendly treatment either way.) No blobs have been touched yet, so nothing to
+                // clean up here.
                 ErrorMessage = ex.Message;
                 return Page();
             }
-            await _db.SaveChangesAsync(); // assigns vehicle.Id before it's used in blob paths below
 
             // Retries up to 3 times total. Guards against a race the first version of this method
             // didn't: two concurrent uploads to the SAME vehicle+stage can both read the same

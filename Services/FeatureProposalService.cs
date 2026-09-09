@@ -178,6 +178,7 @@ namespace MainProjectNumoPart.Services
             {
                 FeatureReviewDecision.Denied => FeatureProposalStatus.Denied,
                 FeatureReviewDecision.Revised => FeatureProposalStatus.AwaitingAiRevision,
+                FeatureReviewDecision.TooComplex => FeatureProposalStatus.AwaitingAiRevision,
                 FeatureReviewDecision.Accepted when proposal.Status == FeatureProposalStatus.ReadyForFinalApproval
                     => FeatureProposalStatus.Approved,
                 FeatureReviewDecision.Accepted => FeatureProposalStatus.AwaitingAiRevision,
