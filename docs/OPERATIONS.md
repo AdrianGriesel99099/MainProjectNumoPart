@@ -5,25 +5,26 @@ this app on your own machine; this one is about the real, permanently-running Az
 
 ## Automated daily loops
 
-Six cloud Claude Code routines run unattended against this repo (`claude.ai/code/routines`, not a
-GitHub Actions workflow — they clone the repo but have no access to production Azure resources at
-all, unlike the GitHub Actions workflows below). Every one of the first five works on its own
-branch and opens a PR; **only the evening deploy routine merges to master**, and only after that
-day's PRs pass tests and don't contain `MIGRATION NEEDED:` (see `CLAUDE.md` → "Database migrations").
+Seven cloud Claude Code routines run unattended against this repo (`claude.ai/code/routines`, not a
+GitHub Actions workflow — they clone the repo, but have no *Azure* access at all; the feature
+review routine reaches production through the site's own API instead, see below). Five of the
+seven work on their own branch and open a PR; **only the evening deploy routine merges those to
+master**, and only after that day's PRs pass tests and don't contain `MIGRATION NEEDED:` (see
+`CLAUDE.md` → "Database migrations"). The feature review routine is the one exception — see its row
+below and `CLAUDE.md` → "Automated daily loops" for why it alone pushes directly.
 
 | Time (SAST / UTC) | Routine | Branch | Does |
 |---|---|---|---|
 | 00:00 / 22:00 | Morning code review | `auto/codereview-morning-<date>` | Reviews the previous day's merged work, opens fix PRs for anything it finds |
-| 05:00 / 03:00 | New feature | `auto/feature-<date>` | Builds the top `docs/BACKLOG.md` item if one's queued (see "Feature proposals & review" in `CLAUDE.md`), otherwise picks its own small feature |
+| 04:00 / 02:00 | Feature review | *(pushes `docs/BACKLOG.md` directly)* | Drafts the next revision for anything a human sent back for changes, and queues final-approved proposals into `docs/BACKLOG.md` (see `CLAUDE.md` → "Feature proposals & review") via the site's `/api/bot/feature-proposals/*` routes |
+| 05:00 / 03:00 | New feature | `auto/feature-<date>` | Builds the top `docs/BACKLOG.md` item if one's queued, otherwise picks its own small feature |
 | 10:00 / 08:00 | Functionality improvement | `auto/improvement-<date>` | Test-first improvement to something that already exists |
 | 15:00 / 13:00 | Frontend/UX pass | `auto/ux-<date>` | Small, focused UI polish |
 | 19:00 / 17:00 | Evening code review | `auto/codereview-evening-<date>` | Reviews that day's other four PRs, approves or requests changes |
 | 20:00 / 18:00 | Deploy today's changes | *(merges to master directly)* | Merges every approved, migration-clean PR from that day one at a time, watching each deploy before merging the next; also appends the day's shipped features to `Data/changelog.json` |
 
-Two GitHub Actions workflows run on their own schedules alongside these — "Photo backup" and
-"Feature proposal review" below. Unlike the cloud routines, both can reach production directly:
-the backup workflow via its own narrowly-scoped Azure OIDC identity, the review workflow via a
-shared API key against the site's own API (see that section for why it doesn't use OIDC).
+One GitHub Actions workflow runs on its own schedule alongside these — "Photo backup" below, via
+its own narrowly-scoped Azure OIDC identity.
 
 ## Photo backup
 
@@ -80,32 +81,15 @@ the real signal, not just "the workflow exists." After first setting this up, or
 to `backup-photos.yml`, trigger it manually via `workflow_dispatch` and read the log rather than
 waiting up to 24 hours for the schedule to prove it either way.
 
-## Feature proposal review
+## Feature review routine's API key
 
-`.github/workflows/feature-review.yml` runs daily (02:00 UTC / 04:00 SAST, one hour before the
-"New feature" cloud routine above) and `workflow_dispatch`. It's the review/approval gate described
-in `CLAUDE.md` → "Feature proposals & review": it drafts the next revision for every proposal a
-human sent back for changes, and queues every proposal a human gave final approval to into
-`docs/BACKLOG.md` for the feature-building routine to pick up.
-
-**What it touches, and what it doesn't.** Unlike the other two workflows on this page, it has no
-Azure credential at all and never talks to the database directly. `Tools/FeatureReviewBot` (a plain
-HTTP console app, no database driver, no Azure SDK) calls the production site's own
-`/api/bot/feature-proposals/*` routes — the same `FeatureProposalService` the web app itself uses,
-so this workflow can never see or touch anything that service doesn't already expose. It also calls
-the Anthropic API to draft each revision, and can push a single commit to `docs/BACKLOG.md`
-(nothing else) when something gets queued.
-
-**Authentication.** A shared secret, not OIDC — there's no Azure resource for this workflow to
-authenticate to. `FEATURE_REVIEW_API_KEY` (repo secret) is sent as an `X-Api-Key` header on every
-request; the site checks it against `FeatureReviewBot:ApiKey`, injected into the Container App as
-an environment variable from a Container App secret (`az containerapp secret set`), never checked
-into `appsettings.json`. `ApiKeyEndpointFilter` (`Authorization/ApiKeyEndpointFilter.cs`) rejects
-every request outright if that value isn't configured, rather than falling open. `ANTHROPIC_API_KEY`
-is also a repo secret. Rotating the key means updating it in both places — the GitHub secret and
-the Container App secret — since a mismatch just fails closed (401), not silently.
-
-**Checking it's actually working.** Same habit as the backup workflow: trigger it manually via
-`workflow_dispatch` after first setting it up or after any change, and read the "Run the review
-bot" step's log — it prints how many proposals it found in each state and what it did with each
-one, rather than trusting a green checkmark alone.
+The feature review routine (see the table above) authenticates to the site with a shared secret,
+not OIDC — it's a cloud routine, not a GitHub Actions workflow, so there's no Azure resource for it
+to log into. It sends the key as an `X-Api-Key` header on every request to `/api/bot/feature-proposals/*`
+(`Endpoints/FeatureProposalEndpoints.cs`); the site checks it against `FeatureReviewBot:ApiKey`,
+injected into the Container App as an environment variable from a Container App secret
+(`az containerapp secret set feature-review-bot-api-key=...`), never checked into
+`appsettings.json`. `ApiKeyEndpointFilter` (`Authorization/ApiKeyEndpointFilter.cs`) rejects every
+request outright if that value isn't configured, rather than falling open. Rotating the key means
+updating it in two places — the Container App secret, and the literal value in the routine's own
+prompt (`claude.ai/code/routines`) — since a mismatch just fails closed (401), not silently.

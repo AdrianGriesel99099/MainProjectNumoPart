@@ -68,13 +68,21 @@ shipped were only caught by that last step — a passing test suite is necessary
 
 ## Automated daily loops
 
-Several routines (`docs/OPERATIONS.md` → "Automated daily loops") run unattended against this repo:
-code review, feature-building, functionality improvements, a UX pass, and an evening deploy. Every
-one of them **works on its own branch and opens a PR — none of them push to master directly.**
-`docker-build.yml` deploys on every push to master, so a direct push from one of these would trigger
-an uncoordinated, unreviewed production deploy outside the one evening slot meant to own that. Only
-the evening deploy loop merges to master, and only after tests pass and after checking for
-`MIGRATION NEEDED:` in open PRs from that day (those are skipped, left for manual handling).
+Seven routines (`docs/OPERATIONS.md` → "Automated daily loops") run unattended against this repo:
+code review, feature review, feature-building, functionality improvements, a UX pass, another code
+review, and an evening deploy. Five of them **work on their own branch and open a PR — they never
+push to master directly.** `docker-build.yml` deploys on every push to master, so a direct push
+from one of these would trigger an uncoordinated, unreviewed production deploy outside the one
+evening slot meant to own that. Only the evening deploy loop merges application-code PRs to master,
+and only after tests pass and after checking for `MIGRATION NEEDED:` in open PRs from that day
+(those are skipped, left for manual handling).
+
+The feature review routine (04:00 SAST) is the one deliberate exception — it pushes a
+`docs/BACKLOG.md` update directly to master, not through a PR. See "Feature proposals & review"
+below for why: the queued item has to be on master before the 05:00 feature-building routine reads
+it an hour later, and a docs-only line is a different risk category from shipping application code
+outside the evening slot (the redundant deploy it triggers redeploys the exact same image, nothing
+new). It never touches application code, tests, or anything else in the repo.
 
 If a production rollback is ever needed, see the `Rollback deploy` GitHub Actions workflow
 (`.github/workflows/rollback.yml`, manually triggered) rather than reasoning it out from scratch.
@@ -103,25 +111,28 @@ submit an idea at `/Features`; the state machine (`Services/FeatureProposalServi
 `Models/FeatureProposalStatus.cs`) is: `NeedsReview` (awaiting a human decision, whether that's the
 raw submission or a round Claude just revised) → human picks **Looks good — continue** / **Needs
 changes** (comment required) / **Reject idea** → `AwaitingAiRevision` or `Denied` (terminal).
-`.github/workflows/feature-review.yml` runs at 04:00 SAST, one hour before the feature-building
-routine: it drafts a fuller write-up for anything `AwaitingAiRevision` via the Anthropic API
-(`Tools/FeatureReviewBot`), landing back on `NeedsReview` or `ReadyForFinalApproval` depending on
-whether Claude thinks it's fully specified. Only from `ReadyForFinalApproval` does a human's
-**Approve — build this** actually mean final approval (`Approved`); accepting earlier than that
-just sends it around for another round. The same nightly workflow also writes every `Approved`
-proposal not yet queued into `docs/BACKLOG.md` as `Build: <title> (proposal #<id>): <description>`
-— the *only* bridge back to the feature-building routine, since neither that routine nor the
-evening deploy routine ever talks to this database directly (cloud Claude routines only ever see a
-git checkout; see the "Two migration histories" note above for why this database can't be reached
-from a routine directly). The evening deploy routine's own prompt looks for `(proposal #<id>)` in a
-merged PR's title and, when present, sets that changelog entry's `link` to `/Features/<id>`.
+The "Feature review (04:00 SAST)" cloud routine runs one hour before the feature-building routine.
+Being Claude itself, it doesn't call any external AI API to draft a revision — it just reasons
+about the proposal directly and posts the result — so this is a *cloud routine*, not a GitHub
+Actions workflow, the same as the other six. It curls the site's own `/api/bot/feature-proposals/*`
+routes (`Endpoints/FeatureProposalEndpoints.cs`, gated by `ApiKeyEndpointFilter` — a shared secret
+in `FeatureReviewBot:ApiKey`, checked against a header the routine sends on every request, since
+there's no user for a routine to sign in as; the site rejects everything if that key isn't
+configured, rather than falling open):
 
-`Tools/FeatureReviewBot` has no database or Azure access of its own — it's a plain HTTP client
-authenticated with a shared API key against the site's own `/api/bot/feature-proposals/*` routes
-(`ApiKeyEndpointFilter`, checked against `FeatureReviewBot:ApiKey` — an env-injected Container App
-secret in production, deliberately outside `appsettings.json`), so every read/write flows through
-the same `FeatureProposalService` the web app itself uses rather than a second query path that
-could drift from it. Needs `ANTHROPIC_API_KEY` and `FEATURE_REVIEW_API_KEY` (must match the site's
-configured value) as GitHub secrets. Those bot routes are deliberately **not** gated by the
-Staff/Admin cookie auth every other route uses — there's no user for a script to sign in as — an
-unconfigured key on the site side rejects every request rather than silently allowing them through.
+1. `GET /awaiting-ai-revision` — for each proposal, draft a fuller write-up addressing the human's
+   last comment and decide whether it's now fully specified, then `POST /{id}/revision`. This lands
+   the proposal on `NeedsReview` or `ReadyForFinalApproval` depending on that decision. Only from
+   `ReadyForFinalApproval` does a human's **Approve — build this** actually mean final approval
+   (`Approved`) — accepting earlier than that (`NeedsReview`) just sends it around for another round.
+2. `GET /approved-unqueued` — for each, append a line to `docs/BACKLOG.md` as
+   `Build: <title> (proposal #<id>): <description>` and `POST /{id}/mark-queued`, then commit and
+   push that file directly to master (see "Automated daily loops" above for why this routine, alone
+   among the seven, pushes directly rather than opening a PR).
+
+This is the *only* bridge back to the feature-building routine — neither that routine nor the
+evening deploy routine ever talks to this database directly (cloud Claude routines only ever see a
+git checkout, plus whatever a routine's own prompt has it curl; see the "Two migration histories"
+note above for why direct database access isn't an option here). The evening deploy routine's own
+prompt looks for `(proposal #<id>)` in a merged PR's title and, when present, sets that changelog
+entry's `link` to `/Features/<id>`.
