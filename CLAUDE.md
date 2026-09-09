@@ -81,11 +81,12 @@ and only after tests pass and after checking for `MIGRATION NEEDED:` in open PRs
 (those are skipped, left for manual handling).
 
 The feature review routine (04:00 SAST) is the one deliberate exception — it pushes a
-`docs/BACKLOG.md` update directly to master, not through a PR. See "Feature proposals & review"
-below for why: the queued item has to be on master before the 05:00 feature-building routine reads
-it an hour later, and a docs-only line is a different risk category from shipping application code
-outside the evening slot (the redundant deploy it triggers redeploys the exact same image, nothing
-new). It never touches application code, tests, or anything else in the repo.
+`FeatureReviewQueue/` update directly to master, not through a PR (a `docs/BACKLOG.md` update lands
+the same way, via a GitHub Actions step either side of it — see "Feature proposals & review" below
+for the full three-stage picture). The queued item has to be on master before the 05:00
+feature-building routine reads it an hour later, and none of this touches application code, tests,
+or anything else in the repo — a different risk category from shipping application code outside the
+evening slot (the redundant deploy it triggers redeploys the exact same image, nothing new).
 
 If a production rollback is ever needed, see the `Rollback deploy` GitHub Actions workflow
 (`.github/workflows/rollback.yml`, manually triggered) rather than reasoning it out from scratch.
@@ -114,28 +115,41 @@ submit an idea at `/Features`; the state machine (`Services/FeatureProposalServi
 `Models/FeatureProposalStatus.cs`) is: `NeedsReview` (awaiting a human decision, whether that's the
 raw submission or a round Claude just revised) → human picks **Looks good — continue** / **Needs
 changes** (comment required) / **Reject idea** → `AwaitingAiRevision` or `Denied` (terminal).
-The "Feature review (04:00 SAST)" cloud routine runs one hour before the feature-building routine.
-Being Claude itself, it doesn't call any external AI API to draft a revision — it just reasons
-about the proposal directly and posts the result — so this is a *cloud routine*, not a GitHub
-Actions workflow, the same as the other six. It curls the site's own `/api/bot/feature-proposals/*`
-routes (`Endpoints/FeatureProposalEndpoints.cs`, gated by `ApiKeyEndpointFilter` — a shared secret
-in `FeatureReviewBot:ApiKey`, checked against a header the routine sends on every request, since
-there's no user for a routine to sign in as; the site rejects everything if that key isn't
-configured, rather than falling open):
+**A cloud routine cannot reach the site at all.** Confirmed by testing (2026-09-09): the routine
+sandbox's egress proxy rejects any outbound connection outside a fixed allowlist (Anthropic's own
+API, GitHub, package registries) with a 403 — not an auth problem, a network one, and not something
+configurable via the routine or environment API. So the "Feature review (04:00 SAST)" cloud routine
+never calls the site directly. Instead, everything flows through its git checkout — the one thing
+it *can* read and write — via a queue two small GitHub Actions steps maintain either side of it:
 
-1. `GET /awaiting-ai-revision` — for each proposal, draft a fuller write-up addressing the human's
-   last comment and decide whether it's now fully specified, then `POST /{id}/revision`. This lands
-   the proposal on `NeedsReview` or `ReadyForFinalApproval` depending on that decision. Only from
-   `ReadyForFinalApproval` does a human's **Approve — build this** actually mean final approval
-   (`Approved`) — accepting earlier than that (`NeedsReview`) just sends it around for another round.
-2. `GET /approved-unqueued` — for each, append a line to `docs/BACKLOG.md` as
-   `Build: <title> (proposal #<id>): <description>` and `POST /{id}/mark-queued`, then commit and
-   push that file directly to master (see "Automated daily loops" above for why this routine, alone
-   among the seven, pushes directly rather than opening a PR).
+1. **`feature-review-prepare.yml`** (03:50 SAST, 10 minutes before the routine) calls
+   `GET /api/bot/feature-proposals/awaiting-ai-revision` and writes one file per proposal to
+   `FeatureReviewQueue/pending/<id>.json` (fully replacing whatever was there — always today's true
+   state, never yesterday's leftovers). It also handles `approved-unqueued` proposals directly,
+   with no reasoning involved: appends `Build: <title> (proposal #<id>): <description>` to
+   `docs/BACKLOG.md` for each and calls `POST /mark-queued`, since that step doesn't need the
+   routine at all.
+2. **The routine** reads every file in `FeatureReviewQueue/pending/`, drafts a fuller write-up for
+   each addressing the human's last comment, and writes `FeatureReviewQueue/drafted/<id>.json` —
+   `{revisedDescription, readyForFinalApproval}` — deleting the corresponding pending file. It
+   commits and pushes directly to master (the one routine, of the seven, that does — see "Automated
+   daily loops" above for why).
+3. **`feature-review-apply.yml`** (04:15 SAST, 15 minutes after the routine starts) reads
+   `FeatureReviewQueue/drafted/`, `POST`s each to `/api/bot/feature-proposals/{id}/revision`, and
+   deletes the file once relayed.
 
-This is the *only* bridge back to the feature-building routine — neither that routine nor the
-evening deploy routine ever talks to this database directly (cloud Claude routines only ever see a
-git checkout, plus whatever a routine's own prompt has it curl; see the "Two migration histories"
-note above for why direct database access isn't an option here). The evening deploy routine's own
-prompt looks for `(proposal #<id>)` in a merged PR's title and, when present, sets that changelog
-entry's `link` to `/Features/<id>`.
+`Tools/FeatureReviewRelay` is the console app both GitHub Actions steps run — pure HTTP + file I/O,
+no AI call of its own (the routine already *is* Claude; nothing else needs to reason), no database.
+Both bot routes it calls (`Endpoints/FeatureProposalEndpoints.cs`, gated by `ApiKeyEndpointFilter`)
+require `FEATURE_REVIEW_API_KEY` as an `X-Api-Key` header, checked against `FeatureReviewBot:ApiKey`
+on the site — an env-injected Container App secret, never in `appsettings.json`; an unconfigured
+key on the site side rejects every request rather than falling open. A file left in either queue
+directory (the routine didn't get to it, or a relay POST failed) is simply retried on the next
+cycle — nothing here assumes any single day's run succeeded.
+
+`RecordAiRevisionAsync` lands the proposal on `NeedsReview` or `ReadyForFinalApproval` depending on
+the routine's `readyForFinalApproval` decision. Only from `ReadyForFinalApproval` does a human's
+**Approve — build this** actually mean final approval (`Approved`) — accepting earlier than that
+(`NeedsReview`) just sends it around for another round. The evening deploy routine's own prompt
+looks for `(proposal #<id>)` in a merged PR's title and, when present, sets that changelog entry's
+`link` to `/Features/<id>`.

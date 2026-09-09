@@ -14,6 +14,11 @@
     <Compile Remove="MainProjectNumoPart.Tests/**" />
     <Content Remove="MainProjectNumoPart.Tests/**" />
     <None Remove="MainProjectNumoPart.Tests/**" />
+    <!-- Tools/FeatureReviewRelay is the same situation: its own console project living in a
+         subfolder of this one. Same exclusion, same reason. -->
+    <Compile Remove="Tools/**" />
+    <Content Remove="Tools/**" />
+    <None Remove="Tools/**" />
   </ItemGroup>
 
   <ItemGroup>
