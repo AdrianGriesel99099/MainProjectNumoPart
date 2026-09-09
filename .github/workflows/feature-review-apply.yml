@@ -1,0 +1,43 @@
+name: Feature review - apply
+
+on:
+  schedule:
+    # 02:15 UTC = 04:15 SAST -- 15 minutes after the "Feature review" cloud routine (04:00 SAST)
+    # starts, giving it a comfortable window to finish drafting and push before this reads its
+    # output.
+    - cron: '15 2 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      # Relays whatever the routine drafted under FeatureReviewQueue/drafted/ back to the site --
+      # see Tools/FeatureReviewRelay/Program.cs. A file the routine never got to, or a POST that
+      # fails here, is simply left behind and retried on tomorrow's cycle.
+      - name: Relay drafted revisions to the site
+        env:
+          FEATURE_REVIEW_SITE_BASE_URL: https://ca-workshop-photos-prod.purplestone-16d8bd9f.southafricanorth.azurecontainerapps.io/
+          FEATURE_REVIEW_SITE_API_KEY: ${{ secrets.FEATURE_REVIEW_API_KEY }}
+          FEATURE_REVIEW_REPO_ROOT: ${{ github.workspace }}
+        run: dotnet run --project Tools/FeatureReviewRelay/FeatureReviewRelay.csproj -- apply
+
+      - name: Commit relayed (now-deleted) queue files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add FeatureReviewQueue
+          if ! git diff --cached --quiet; then
+            git commit -m "Clear relayed feature-review drafts"
+            git push
+          else
+            echo "Nothing to clean up."
+          fi

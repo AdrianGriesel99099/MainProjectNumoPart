@@ -3,6 +3,7 @@ using System;
 using MainProjectNumoPart.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace MainProjectNumoPart.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260908214234_AddFeatureProposals")]
+    partial class AddFeatureProposals
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "8.0.29");
@@ -96,57 +99,6 @@ namespace MainProjectNumoPart.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("FeatureProposals");
-                });
-
-            modelBuilder.Entity("MainProjectNumoPart.Models.FeatureProposalQuestion", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("FeatureProposalRoundId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("Prompt")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("QuestionNumber")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int?>("SelectedOptionId")
-                        .HasColumnType("INTEGER");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("FeatureProposalRoundId");
-
-                    b.HasIndex("SelectedOptionId");
-
-                    b.ToTable("FeatureProposalQuestions");
-                });
-
-            modelBuilder.Entity("MainProjectNumoPart.Models.FeatureProposalQuestionOption", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("FeatureProposalQuestionId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("Label")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("OptionNumber")
-                        .HasColumnType("INTEGER");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("FeatureProposalQuestionId");
-
-                    b.ToTable("FeatureProposalQuestionOptions");
                 });
 
             modelBuilder.Entity("MainProjectNumoPart.Models.FeatureProposalRound", b =>
@@ -548,35 +500,6 @@ namespace MainProjectNumoPart.Migrations
                     b.Navigation("Vehicle");
                 });
 
-            modelBuilder.Entity("MainProjectNumoPart.Models.FeatureProposalQuestion", b =>
-                {
-                    b.HasOne("MainProjectNumoPart.Models.FeatureProposalRound", "Round")
-                        .WithMany("Questions")
-                        .HasForeignKey("FeatureProposalRoundId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("MainProjectNumoPart.Models.FeatureProposalQuestionOption", "SelectedOption")
-                        .WithMany()
-                        .HasForeignKey("SelectedOptionId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.Navigation("Round");
-
-                    b.Navigation("SelectedOption");
-                });
-
-            modelBuilder.Entity("MainProjectNumoPart.Models.FeatureProposalQuestionOption", b =>
-                {
-                    b.HasOne("MainProjectNumoPart.Models.FeatureProposalQuestion", "Question")
-                        .WithMany("Options")
-                        .HasForeignKey("FeatureProposalQuestionId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Question");
-                });
-
             modelBuilder.Entity("MainProjectNumoPart.Models.FeatureProposalRound", b =>
                 {
                     b.HasOne("MainProjectNumoPart.Models.FeatureProposal", "FeatureProposal")
@@ -675,16 +598,6 @@ namespace MainProjectNumoPart.Migrations
             modelBuilder.Entity("MainProjectNumoPart.Models.FeatureProposal", b =>
                 {
                     b.Navigation("Rounds");
-                });
-
-            modelBuilder.Entity("MainProjectNumoPart.Models.FeatureProposalQuestion", b =>
-                {
-                    b.Navigation("Options");
-                });
-
-            modelBuilder.Entity("MainProjectNumoPart.Models.FeatureProposalRound", b =>
-                {
-                    b.Navigation("Questions");
                 });
 
             modelBuilder.Entity("MainProjectNumoPart.Models.Vehicle", b =>

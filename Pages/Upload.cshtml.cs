@@ -129,47 +129,30 @@ namespace MainProjectNumoPart.Pages
             }
 
             var userId = _userManager.GetUserId(User)!;
-            Vehicle vehicle = null!; // always assigned before use — see the loop below
-
-            // Retried for the same reason as the sequence-number loop below: two concurrent
-            // uploads for the SAME brand-new VIN/Reg can both find no existing vehicle and both
-            // try to INSERT one. Vehicles.Vin and Vehicles.Reg both have a unique index (see
-            // AppDbContext), so the loser's SaveChangesAsync fails with the identical constraint
-            // violation IsSequenceConflict already recognises — without this loop that failure
-            // went unhandled here (this call sits before the try/catch below), crashing the
-            // loser's request instead of simply attaching to the vehicle the winner just created.
-            const int maxVehicleAttempts = 3;
-            for (var vehicleAttempt = 1; vehicleAttempt <= maxVehicleAttempts; vehicleAttempt++)
+            Vehicle vehicle;
+            try
             {
-                try
-                {
-                    // Resolution is by the SUBMITTED TEXT, never by VehicleId — VehicleId is display
-                    // context only. That's intentional: arriving from a vehicle page and correcting a
-                    // typo in the VIN must re-file the photos under the corrected vehicle, which is
-                    // exactly what leaving the fields editable is for.
-                    vehicle = await _vehicles.FindOrCreateAsync(Vin, Reg);
-                }
-                catch (VehicleIdentifierConflictException ex)
-                {
-                    // VIN and Reg point at two different existing vehicles — almost always a typo.
-                    // No blobs have been touched yet, so nothing to clean up here.
-                    ErrorMessage = ex.Message;
-                    return Page();
-                }
-
-                try
-                {
-                    await _db.SaveChangesAsync(); // assigns vehicle.Id before it's used in blob paths below
-                    break;
-                }
-                catch (Exception ex) when (IsSequenceConflict(ex) && vehicleAttempt < maxVehicleAttempts)
-                {
-                    // Lost the race to a concurrent upload creating the identical vehicle. Nothing
-                    // committed (SaveChangesAsync itself failed) — discard this attempt's
-                    // tracked-but-unsaved Vehicle and retry; FindOrCreateAsync will now find the
-                    // row the other request just committed.
-                    _db.ChangeTracker.Clear();
-                }
+                // Resolution is by the SUBMITTED TEXT, never by VehicleId — VehicleId is display
+                // context only. That's intentional: arriving from a vehicle page and correcting a
+                // typo in the VIN must re-file the photos under the corrected vehicle, which is
+                // exactly what leaving the fields editable is for.
+                vehicle = await _vehicles.FindOrCreateAsync(Vin, Reg);
+                // Commits, assigning vehicle.Id before it's used in blob paths below. Two
+                // concurrent uploads for the same brand-new VIN/Reg can both reach this point
+                // having seen "nothing exists yet" — SaveWithRetryAsync is what turns the
+                // loser's unique-index violation into a transparent re-resolve instead of an
+                // unhandled 500.
+                vehicle = await _vehicles.SaveWithRetryAsync(vehicle, Vin, Reg);
+            }
+            catch (VehicleIdentifierConflictException ex)
+            {
+                // VIN and Reg point at two different existing vehicles — almost always a typo.
+                // (SaveWithRetryAsync's own re-resolve can theoretically throw this too, if a
+                // second concurrent request's create is what the retry collides with — same
+                // friendly treatment either way.) No blobs have been touched yet, so nothing to
+                // clean up here.
+                ErrorMessage = ex.Message;
+                return Page();
             }
 
             // Retries up to 3 times total. Guards against a race the first version of this method

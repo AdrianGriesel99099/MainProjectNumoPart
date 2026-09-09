@@ -89,6 +89,13 @@ After any significant change, confirm end-to-end by hand:
 - [ ] Upload another photo against the same VIN plus a Reg this time — confirm it lands
       on the *same* vehicle (find-or-create matched by VIN) and the Reg now shows on the page.
 - [ ] Search by that Reg — same vehicle is found.
+- [ ] Give two vehicles a `MakeModel` (e.g. "Ford Focus" and "Ford Fiesta") and search by a
+      make/model fragment that matches only one of them (e.g. "focus") — lands on that vehicle's
+      page directly. Search a fragment matching both (e.g. "ford") — shows a results list with
+      both instead of the not-found message.
+- [ ] Search a fragment of a VIN or Reg that isn't the exact value (e.g. a middle chunk of the
+      VIN) — same behavior: single match redirects, multiple matches list, no match shows the
+      not-found message with the upload link.
 - [ ] Visit `/Photos`, filter by stage and by VIN — results narrow correctly.
 - [ ] Select 2+ photos on the job page and download a zip — confirm the stage-folder
       structure inside it.

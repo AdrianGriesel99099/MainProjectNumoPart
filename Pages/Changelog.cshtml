@@ -1,0 +1,89 @@
+@* Pages/Changelog.cshtml *@
+@page
+@model MainProjectNumoPart.Pages.ChangelogModel
+@{
+    ViewData["Title"] = "What's new";
+}
+
+<style>
+    /* Scoped to this page rather than site.css: a vertical timeline is a one-off layout, not a
+       reusable component anything else in this app needs. */
+    .changelog-head { margin-bottom: 2rem; }
+    .changelog-head .eyebrow {
+        font-family: var(--f-mono); font-size: 0.75rem; letter-spacing: 0.16em;
+        text-transform: uppercase; color: var(--amber);
+    }
+    .changelog-head h2 { margin: 0.25rem 0 0; }
+
+    .changelog { position: relative; max-width: 720px; }
+    /* The spine: one continuous line all entries hang off, not a border-per-row that would
+       visibly break at every group boundary. */
+    .changelog::before {
+        content: ""; position: absolute; left: 7px; top: 0.5rem; bottom: 0.5rem;
+        width: 1px; background: var(--line-2);
+    }
+
+    .changelog-day { position: relative; padding-left: 2.25rem; margin-bottom: 2.25rem; }
+    .changelog-day:last-child { margin-bottom: 0; }
+    .changelog-day::before {
+        content: ""; position: absolute; left: 0; top: 0.35rem;
+        width: 15px; height: 15px; border-radius: 50%;
+        background: var(--panel); border: 2px solid var(--amber);
+    }
+    .changelog-date {
+        font-family: var(--f-mono); font-size: 0.8rem; letter-spacing: 0.06em;
+        color: var(--muted); margin-bottom: 0.85rem;
+    }
+
+    .changelog-entry {
+        background: var(--panel); border: 1px solid var(--line-2); border-radius: 6px;
+        padding: 1rem 1.2rem; margin-bottom: 0.75rem;
+    }
+    .changelog-entry:last-child { margin-bottom: 0; }
+    .changelog-entry h3 {
+        margin: 0 0 0.4rem; font-size: 1.05rem; font-weight: 700; color: var(--paper);
+    }
+    .changelog-entry p { margin: 0; color: var(--muted); line-height: 1.55; }
+
+    .changelog-empty {
+        border: 1px dashed var(--line-2); border-radius: 6px; padding: 2rem;
+        text-align: center; color: var(--muted); max-width: 720px;
+    }
+</style>
+
+<div class="changelog-head">
+    <span class="eyebrow">Release notes</span>
+    <h2>What's new</h2>
+</div>
+
+@if (Model.Groups.Count == 0)
+{
+    <div class="changelog-empty">Nothing recorded yet — check back after the next release.</div>
+}
+else
+{
+    <div class="changelog">
+        @foreach (var day in Model.Groups)
+        {
+            <div class="changelog-day">
+                <div class="changelog-date">@day.Key.ToString("d MMMM yyyy")</div>
+                @foreach (var entry in day)
+                {
+                    <div class="changelog-entry">
+                        <h3>
+                            @if (entry.Link is not null)
+                            {
+                                <a href="@entry.Link">@entry.Title</a>
+                            }
+                            else
+                            {
+                                @entry.Title
+                            }
+                        </h3>
+                        <p>@entry.Description</p>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+}
