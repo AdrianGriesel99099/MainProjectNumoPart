@@ -15,6 +15,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Data.Sqlite;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 
 namespace MainProjectNumoPart.Pages
@@ -295,24 +296,37 @@ namespace MainProjectNumoPart.Pages
         // Two different symptoms of the SAME underlying event — another concurrent request already
         // claimed this vehicle+stage+sequence number — and a retry with a fresh number fixes both:
         //
-        //  1. The DB unique index rejecting SaveChangesAsync. EF Core wraps SQLite constraint
-        //     violations in DbUpdateException; check the underlying SqliteException's EXTENDED
-        //     error code (2067 = SQLITE_CONSTRAINT_UNIQUE) specifically — not just the primary code
-        //     (19 = SQLITE_CONSTRAINT, which also covers foreign-key/not-null/check violations that
-        //     should NOT be silently retried, since retrying wouldn't fix them).
+        //  1. The DB unique index rejecting SaveChangesAsync. EF Core wraps the provider's own
+        //     constraint-violation exception in DbUpdateException, and which exception that is
+        //     depends on which provider is actually running — this app uses SQLite locally and SQL
+        //     Server in production (see Program.cs), and BOTH need recognising here or this retry
+        //     silently only works in dev — the same gap VehicleLookupService.IsUniqueConstraintViolation
+        //     already covers for the sibling vehicle-creation race:
+        //       - SQLite: check the underlying SqliteException's EXTENDED error code
+        //         (2067 = SQLITE_CONSTRAINT_UNIQUE) specifically — not just the primary code
+        //         (19 = SQLITE_CONSTRAINT, which also covers foreign-key/not-null/check violations
+        //         that should NOT be silently retried, since retrying wouldn't fix them).
+        //       - SQL Server: check the underlying SqlException's Number for 2627 (violation of a
+        //         PRIMARY KEY or UNIQUE KEY constraint) or 2601 (duplicate key row in a unique
+        //         index) — the two error numbers SQL Server actually raises for this, depending on
+        //         whether the index was declared as a constraint or a plain unique index.
         //  2. The blob layer rejecting a create-only upload because something is already at that
         //     path (see BlobPhotoStorage.UploadAsync). Matched with the same precision as the
-        //     SQLite check — this exact status AND error code, not "any RequestFailedException" —
-        //     so a 403, a 500, or a transport fault still propagates instead of quietly burning
+        //     database checks — this exact status AND error code, not "any RequestFailedException"
+        //     — so a 403, a 500, or a transport fault still propagates instead of quietly burning
         //     retry attempts on something a fresh sequence number cannot fix.
         //
-        // Both are needed, and neither subsumes the other: two colliding uploads with DIFFERENT
+        // Neither database check subsumes the other (only one provider is ever active in a given
+        // environment), and the blob check subsumes neither: two colliding uploads with DIFFERENT
         // file extensions produce different blob paths for the same sequence number, so they sail
         // past the blob check and are caught only by (1); two with the same extension collide at
         // the blob layer first and are caught by (2) before any bytes can be overwritten.
         private static bool IsSequenceConflict(Exception ex)
         {
             if (ex is DbUpdateException { InnerException: SqliteException { SqliteExtendedErrorCode: 2067 } })
+                return true;
+
+            if (ex is DbUpdateException { InnerException: SqlException { Number: 2627 or 2601 } })
                 return true;
 
             return ex is RequestFailedException { Status: 409 } blobConflict
