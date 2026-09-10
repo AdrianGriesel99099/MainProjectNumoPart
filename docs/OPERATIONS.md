@@ -18,10 +18,10 @@ migrations"). The feature review routine is the one exception — see its row be
 |---|---|---|---|
 | 00:00 / 22:00 | Morning code review | `auto/codereview-morning-<date>` | Reviews the previous day's merged work, opens fix PRs for anything it finds |
 | 04:00 / 02:00 | Feature review | *(pushes `FeatureReviewQueue/` directly)* | Drafts the next revision for anything a human sent back for changes — reading/writing only its own git checkout, via a queue two GitHub Actions steps maintain either side of it (see "Feature review queue" below) |
-| 05:00 / 03:00 | New feature | `auto/feature-<date>` | Builds the top `docs/BACKLOG.md` item if one's queued, otherwise picks its own small feature |
+| 05:00 & 12:00 / 03:00 & 10:00 | New feature | `auto/feature-<date>` (first run), `auto/feature2-<date>` (second run) | Builds the top `docs/BACKLOG.md` item if one's queued, otherwise picks its own small feature; runs twice a day off one routine on a two-value cron — the second run checks whether `auto/feature-<date>` already exists to know it's the second run, and looks at the first run's PR to avoid building the same thing twice |
 | 10:00 / 08:00 | Functionality improvement | `auto/improvement-<date>` | Test-first improvement to something that already exists |
 | 15:00 / 13:00 | Frontend/UX pass | `auto/ux-<date>` | Small, focused UI polish |
-| 19:00 / 17:00 | Evening code review | `auto/codereview-evening-<date>` | Reviews that day's other four PRs, approves or requests changes |
+| 19:00 / 17:00 | Evening code review | `auto/codereview-evening-<date>` | Reviews that day's other PRs (up to five now that "New feature" can produce two), approves or requests changes |
 | 20:00 / 18:00 | Deploy today's changes | *(merges to master directly)* | Merges every approved, migration-clean PR from that day one at a time, watching each deploy before merging the next; also appends the day's shipped features to `Data/changelog.json` |
 
 Three GitHub Actions workflows run on their own schedules alongside these — "Photo backup" (its own

@@ -74,7 +74,16 @@ shipped were only caught by that last step — a passing test suite is necessary
 Seven routines (`docs/OPERATIONS.md` → "Automated daily loops") run unattended against this repo:
 code review, feature review, feature-building, functionality improvements, a UX pass, another code
 review, and an evening deploy. Five of them **work on their own branch and open a PR — they never
-push to master directly.** `docker-build.yml` deploys on every push to master, so a direct push
+push to master directly.**
+
+The feature-building routine runs **twice a day** (05:00 and 12:00 SAST, one routine on a
+two-value cron) rather than once, so it can't just always use `auto/feature-<date>` — the second
+run would collide with the first's still-open branch. Its prompt has it check whether
+`auto/feature-<date>` already exists on origin before picking a branch: if so, it's the second run
+and uses `auto/feature2-<date>` instead, after looking at the first run's PR so it doesn't build the
+same thing twice. Both the evening code review and the deploy routine's prompts know to look for
+either branch — the deploy routine's changelog step in particular loops over each one it finds
+rather than assuming exactly one feature PR per day. `docker-build.yml` deploys on every push to master, so a direct push
 from one of these would trigger an uncoordinated, unreviewed production deploy outside the one
 evening slot meant to own that. Only the evening deploy loop merges application-code PRs to master,
 and only after tests pass and after checking for `MIGRATION NEEDED:` in open PRs from that day
