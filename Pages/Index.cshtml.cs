@@ -31,6 +31,9 @@ namespace MainProjectNumoPart.Pages
         // fragment or make/model — see VehicleLookupService.FindManyBySearchTermAsync.
         public System.Collections.Generic.List<Vehicle> SearchResults { get; set; } = new();
 
+        // Vehicles absent from this dictionary have no untagged photos — see UntaggedPhotoCounts.
+        public System.Collections.Generic.Dictionary<int, int> UntaggedCounts { get; set; } = new();
+
         public async Task<IActionResult> OnGetAsync()
         {
             if (!string.IsNullOrWhiteSpace(Search))
@@ -60,6 +63,9 @@ namespace MainProjectNumoPart.Pages
                 .OrderByDescending(v => v.CreatedAtUtc)
                 .Take(10)
                 .ToListAsync();
+
+            var vehicleIds = RecentVehicles.Select(v => v.Id).Concat(SearchResults.Select(v => v.Id));
+            UntaggedCounts = await Services.UntaggedPhotoCounts.ForVehiclesAsync(_db, vehicleIds);
 
             return Page();
         }
