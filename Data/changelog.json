@@ -1,5 +1,10 @@
 [
   {
+    "date": "2026-09-10",
+    "title": "Feature added: untagged-photo badge on the home page",
+    "description": "A small badge on the home page's vehicle tables now shows how many untagged photos each vehicle has, with a link to jump straight to the tagging worklist."
+  },
+  {
     "date": "2026-09-09",
     "title": "Feature added: fuzzy home-page search by fragment/make/model",
     "description": "Search now finds vehicles by partial VIN/Reg fragments and make/model substring (case-insensitive), with up to 25 results returned when multiple matches are found."
