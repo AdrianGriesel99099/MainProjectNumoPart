@@ -34,7 +34,11 @@ namespace MainProjectNumoPart.Pages.Photos
         [Microsoft.AspNetCore.Mvc.BindProperty(SupportsGet = true)] public DateTime? TakenFrom { get; set; }
         [Microsoft.AspNetCore.Mvc.BindProperty(SupportsGet = true)] public DateTime? TakenTo { get; set; }
 
+        public const int DisplayCap = 120;
+
         public List<Photo> Photos { get; set; } = new();
+        public int TotalMatchCount { get; set; }
+        public bool IsTruncated => TotalMatchCount > Photos.Count;
 
         public async Task OnGetAsync()
         {
@@ -53,9 +57,10 @@ namespace MainProjectNumoPart.Pages.Photos
                 TakenTo = TakenTo
             };
 
-            Photos = await PhotoFilterQuery.Apply(_db.Photos.Include(p => p.Vehicle), filter)
-                .Take(120)
-                .ToListAsync();
+            var matching = PhotoFilterQuery.Apply(_db.Photos.Include(p => p.Vehicle), filter);
+
+            TotalMatchCount = await matching.CountAsync();
+            Photos = await matching.Take(DisplayCap).ToListAsync();
         }
     }
 }
