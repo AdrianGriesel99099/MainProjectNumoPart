@@ -32,6 +32,13 @@
     <a asp-page="/Photos/Index" class="btn btn-sm btn-outline-secondary">Clear</a>
 </form>
 
+@if (Model.IsTruncated)
+{
+    <p class="text-muted small">
+        Showing the first @Model.Photos.Count of @Model.TotalMatchCount matching photos &mdash; narrow the filters above to see the rest.
+    </p>
+}
+
 <div class="photo-grid">
     @foreach (var photo in Model.Photos)
     {
