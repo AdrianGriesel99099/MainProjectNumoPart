@@ -109,10 +109,15 @@
             photoSelect.classList.remove('d-none');
             photoSelect.innerHTML = photos.map((p) => `<option value="${p.id}">${p.label}</option>`).join('');
             photoSelect.value = currentPhotoId && photos.some((p) => p.id === currentPhotoId) ? currentPhotoId : photos[0].id;
+            currentPhotoId = parseInt(photoSelect.value, 10);
         } else {
+            // Reset rather than just hiding: a previous part's <select> (options and value) would
+            // otherwise still be sitting in the DOM, and this part has only one photo to pick from
+            // anyway -- so currentPhotoId comes from `photos` itself, never from stale select state.
             photoSelect.classList.add('d-none');
+            photoSelect.innerHTML = '';
+            currentPhotoId = photos[0].id;
         }
-        currentPhotoId = parseInt(photoSelect.value || photos[0].id, 10);
         hasPhoto = true;
 
         canvasWrap.innerHTML = '';
