@@ -303,9 +303,67 @@
     }
     <button type="button" id="selection-clear" class="btn btn-sm btn-outline-light">Clear</button>
     <button type="submit" form="selection-download-form" class="btn btn-sm btn-primary">⬇ Download zip</button>
+    @* Separate from "Download zip" above (the plain, no-frills bulk download): this is the
+       richer export a client can actually be handed — each photo carries its stage, part, date
+       and comment thread, and damage-mark pins can be burned onto the image on request. Posted
+       via fetch rather than a plain form submit since the request body is JSON (format +
+       includeDamageMarks aren't just an id list) and the response needs to become a downloaded
+       file client-side rather than a browser navigation. *@
+    <select id="export-format" class="form-select form-select-sm" style="width:auto" aria-label="Export format">
+        <option value="Pdf">Export: PDF</option>
+        <option value="Zip">Export: zip</option>
+    </select>
+    <label class="form-check form-check-inline text-light small mb-0" title="Burn each damage mark's pin onto the photo">
+        <input type="checkbox" id="export-include-marks" class="form-check-input" />
+        Include damage marks
+    </label>
+    <button type="button" id="export-button" class="btn btn-sm btn-outline-light">Export</button>
+    <div id="export-error" class="text-danger small"></div>
 </div>
 
 <script src="~/js/multiselect.js"></script>
+<script>
+    document.getElementById('export-button')?.addEventListener('click', async (e) => {
+        const ids = window.PhotoSelection.ids();
+        if (ids.length === 0) return;
+
+        const button = e.target;
+        const errorEl = document.getElementById('export-error');
+        errorEl.textContent = '';
+        button.disabled = true;
+        try {
+            const format = document.getElementById('export-format').value;
+            const includeDamageMarks = document.getElementById('export-include-marks').checked;
+
+            const response = await fetch('/api/photos/export', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids, format, includeDamageMarks })
+            });
+
+            if (response.status !== 200) {
+                errorEl.textContent = (await response.text()) || 'Could not export the selected photos.';
+                return;
+            }
+
+            const blob = await response.blob();
+            const disposition = response.headers.get('Content-Disposition') || '';
+            const match = disposition.match(/filename="([^"]+)"/);
+            const fileName = match ? match[1] : `photos.${format.toLowerCase()}`;
+
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+        } finally {
+            button.disabled = false;
+        }
+    });
+</script>
 
 @if (Model.Vehicle.Photos.Count > 0)
 {
