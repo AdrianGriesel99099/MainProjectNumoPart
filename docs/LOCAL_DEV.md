@@ -96,6 +96,11 @@ After any significant change, confirm end-to-end by hand:
 - [ ] Search a fragment of a VIN or Reg that isn't the exact value (e.g. a middle chunk of the
       VIN) — same behavior: single match redirects, multiple matches list, no match shows the
       not-found message with the upload link.
+- [ ] Type 2+ characters of an existing VIN/Reg/make-model into the home page search box — a
+      dropdown of live suggestions appears below it (`GET /api/vehicles/search-suggestions`);
+      clicking one goes straight to that vehicle without pressing Search. Typing a single
+      character shows no dropdown. Arrow keys move a highlight through the list and Enter opens
+      the highlighted one; Escape or clicking elsewhere closes it without submitting the form.
 - [ ] Visit `/Photos`, filter by stage and by VIN — results narrow correctly.
 - [ ] Select 2+ photos on the job page and download a zip — confirm the stage-folder
       structure inside it.

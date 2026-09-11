@@ -173,6 +173,25 @@ a:hover { color: #9fdaf3; }
 .table a { color: var(--paper); text-decoration: none; }
 .table a:hover { color: var(--ice); }
 
+/* ---------- search suggestions dropdown (home page) ---------- */
+#vehicle-search-suggestions {
+  background: var(--panel);
+  border: 1px solid var(--line-2);
+  border-radius: 4px;
+  overflow: hidden;
+}
+#vehicle-search-suggestions .list-group-item {
+  background: transparent;
+  border-color: var(--line);
+  color: var(--paper);
+  text-align: left;
+}
+#vehicle-search-suggestions .list-group-item:hover,
+#vehicle-search-suggestions .list-group-item.active {
+  background: var(--panel-2);
+  color: var(--ice);
+}
+
 /* ---------- feedback ---------- */
 .alert-danger { background: rgba(229, 103, 95, 0.12); border-color: #6b2b26; color: #f3a29c; }
 .alert-success { background: rgba(79, 184, 122, 0.12); border-color: #285c3c; color: #9fdfba; }
