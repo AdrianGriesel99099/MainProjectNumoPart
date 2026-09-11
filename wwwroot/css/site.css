@@ -332,3 +332,17 @@ body {
 .damage-mark-canvas-wrap .damage-mark-empty { padding: 2rem; color: #888; font-size: 0.85rem; cursor: default; text-align: center; }
 .damage-mark-dot { position: absolute; width: 18px; height: 18px; margin-left: -9px; margin-top: -9px; border-radius: 50%; background: rgba(229,103,95,0.9); border: 2px solid #fff; cursor: pointer; }
 .damage-mark-dot.pending { background: rgba(242,160,62,0.95); }
+
+/* Bootstrap's bg-warning/text-dark utilities are both !important, so the "N untagged" links on
+   the home page (Pages/Index.cshtml) never got the .table a:hover colour shift every other link
+   in these tables gets -- hovering looked identical to resting, with no sign the badge is
+   clickable. filter() sidesteps the !important fight the same way .btn-clicked does above. */
+a.badge.bg-warning:hover,
+a.badge.bg-warning:focus-visible {
+  filter: brightness(1.15);
+  text-decoration: underline;
+}
+a.badge.bg-warning:focus-visible {
+  outline: 2px solid var(--ice);
+  outline-offset: 2px;
+}
