@@ -18,9 +18,36 @@ namespace MainProjectNumoPart.Endpoints
         // so it's anchored at a fixed position rather than a specific photo.
         public record AddDamageMarkRequest(Part Part, int? PhotoId, double XPercent, double YPercent, string? Note);
 
+        public record VehicleSuggestion(int Id, string? Vin, string? Reg, string? MakeModel);
+
+        // Fewer than VehicleLookupService's own MaxResults (25) -- that list is a "pick the right
+        // one" page, this is a dropdown under a text box, and needs to fit on screen as you type.
+        private const int SuggestionLimit = 8;
+
+        // A search term shorter than this matches too much of the table to be a useful dropdown
+        // (a single digit hits a large fraction of every VIN) -- the home page's full search
+        // still works normally for a short term, only the live suggestions wait for more input.
+        private const int MinSuggestionTermLength = 2;
+
         public static void MapVehicleEndpoints(this WebApplication app)
         {
             var group = app.MapGroup("/api/vehicles").RequireAuthorization();
+
+            group.MapGet("/search-suggestions", async (
+                string? term,
+                VehicleLookupService vehicles,
+                CancellationToken ct) =>
+            {
+                if (term is null || term.Trim().Length < MinSuggestionTermLength)
+                {
+                    return Results.Ok(Array.Empty<VehicleSuggestion>());
+                }
+
+                var matches = await vehicles.FindManyBySearchTermAsync(term, SuggestionLimit, ct);
+
+                return Results.Ok(matches.Select(v =>
+                    new VehicleSuggestion(v.Id, v.Vin, v.Reg, v.MakeModel)));
+            });
 
             // A minimal-API endpoint rather than a Razor Page handler specifically for this line:
             // Razor Pages has no per-handler [Authorize], so a delete handler on the (all-roles)
