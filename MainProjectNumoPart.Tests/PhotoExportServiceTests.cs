@@ -129,10 +129,29 @@ namespace MainProjectNumoPart.Tests
 
             using var archive = new ZipArchive(new MemoryStream(result.Content!), ZipArchiveMode.Read);
             Assert.Equal(4, archive.Entries.Count);
-            Assert.Contains(archive.Entries, e => e.FullName == "Checkin/Checkin_FrontBumper_001.jpg");
-            Assert.Contains(archive.Entries, e => e.FullName == "Checkin/Checkin_FrontBumper_001.txt");
-            Assert.Contains(archive.Entries, e => e.FullName == "Checkout/Checkout_Untagged_002.jpg");
-            Assert.Contains(archive.Entries, e => e.FullName == "Checkout/Checkout_Untagged_002.txt");
+            Assert.Contains(archive.Entries, e => e.FullName == "Checkin/AB12CDE_Checkin_FrontBumper_001.jpg");
+            Assert.Contains(archive.Entries, e => e.FullName == "Checkin/AB12CDE_Checkin_FrontBumper_001.txt");
+            Assert.Contains(archive.Entries, e => e.FullName == "Checkout/AB12CDE_Checkout_Untagged_002.jpg");
+            Assert.Contains(archive.Entries, e => e.FullName == "Checkout/AB12CDE_Checkout_Untagged_002.txt");
+        }
+
+        [Fact]
+        public async Task ExportAsync_Zip_PhotosFromDifferentVehiclesWithSameStageAndSequence_DoNotCollide()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var storage = new FakePhotoStorage();
+            var vehicleA = SeedVehicle(db, "AAA111");
+            var vehicleB = SeedVehicle(db, "BBB222");
+            var photoA = await SeedPhotoAsync(db, storage, vehicleA, Stage.Checkin, Part.FrontBumper, 1);
+            var photoB = await SeedPhotoAsync(db, storage, vehicleB, Stage.Checkin, Part.FrontBumper, 1);
+
+            var result = await Build(db, storage).ExportAsync(new[] { photoA.Id, photoB.Id }, PhotoExportFormat.Zip, false);
+
+            using var archive = new ZipArchive(new MemoryStream(result.Content!), ZipArchiveMode.Read);
+            var jpgEntryNames = archive.Entries.Where(e => e.FullName.EndsWith(".jpg")).Select(e => e.FullName).ToList();
+            Assert.Equal(2, jpgEntryNames.Distinct().Count());
+            Assert.Contains("Checkin/AAA111_Checkin_FrontBumper_001.jpg", jpgEntryNames);
+            Assert.Contains("Checkin/BBB222_Checkin_FrontBumper_001.jpg", jpgEntryNames);
         }
 
         [Fact]

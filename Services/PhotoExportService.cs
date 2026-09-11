@@ -187,10 +187,16 @@ namespace MainProjectNumoPart.Services
             return output.ToArray();
         }
 
+        // SequenceNumber is only unique per vehicle+stage (Photo.FileName embeds VIN/Reg for
+        // exactly this reason — see PhotoNaming.BuildFileName), and the endpoint doesn't scope
+        // selected ids to one vehicle. Not reachable through the shipped UI today (Details.cshtml
+        // only ever selects from the current vehicle's own photos), but folding the vehicle's own
+        // blob folder name in here keeps entries unique even if that ever changes, at no cost.
         private static string BuildFileNameBase(Photo photo)
         {
             var partLabel = photo.Part.HasValue ? photo.Part.Value.ToString() : "Untagged";
-            return $"{photo.Stage}_{partLabel}_{photo.SequenceNumber:000}";
+            var vehicleLabel = SanitizeForFileName(photo.Vehicle.BlobFolderName);
+            return $"{vehicleLabel}_{photo.Stage}_{partLabel}_{photo.SequenceNumber:000}";
         }
 
         private static readonly Regex UnsafeFileNameChars = new("[^A-Za-z0-9_-]+", RegexOptions.Compiled);
