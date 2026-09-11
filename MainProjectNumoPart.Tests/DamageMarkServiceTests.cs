@@ -137,6 +137,46 @@ namespace MainProjectNumoPart.Tests
             Assert.Empty(db.DamageMarks);
         }
 
+        // canvasWrap (wwwroot/css: .damage-mark-canvas-wrap) has overflow:hidden, so a pin outside
+        // 0-100 on either axis renders clipped -- invisible and unclickable -- even though the note
+        // itself would still save. Clamping here keeps every mark reachable through its pin instead
+        // of only through the DamageMarksNewestFirst list.
+        [Theory]
+        [InlineData(150.0, 50.0, 100.0, 50.0)]
+        [InlineData(-30.0, 50.0, 0.0, 50.0)]
+        [InlineData(50.0, 150.0, 50.0, 100.0)]
+        [InlineData(50.0, -30.0, 50.0, 0.0)]
+        [InlineData(0.0, 100.0, 0.0, 100.0)]
+        public async Task AddAsync_ClampsOutOfRangePositionsIntoZeroToHundred(
+            double xPercent, double yPercent, double expectedX, double expectedY)
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var vehicle = SeedVehicle(db);
+
+            var result = await Build(db).AddAsync(
+                vehicle.Id, Part.FrontBumper, null, xPercent, yPercent, "Scuff", "u1", "staff@w.local");
+
+            Assert.Equal(NoteStatus.Success, result.Status);
+            var saved = db.DamageMarks.Single();
+            Assert.Equal(expectedX, saved.XPercent);
+            Assert.Equal(expectedY, saved.YPercent);
+        }
+
+        [Fact]
+        public async Task AddAsync_TreatsNonFinitePositionsAsCentred()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var vehicle = SeedVehicle(db);
+
+            var result = await Build(db).AddAsync(
+                vehicle.Id, Part.FrontBumper, null, double.NaN, double.PositiveInfinity, "Scuff", "u1", "staff@w.local");
+
+            Assert.Equal(NoteStatus.Success, result.Status);
+            var saved = db.DamageMarks.Single();
+            Assert.Equal(50.0, saved.XPercent);
+            Assert.Equal(50.0, saved.YPercent);
+        }
+
         [Fact]
         public async Task DeleteAsync_RemovesTheMark()
         {
