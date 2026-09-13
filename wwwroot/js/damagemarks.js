@@ -109,10 +109,18 @@
             photoSelect.classList.remove('d-none');
             photoSelect.innerHTML = photos.map((p) => `<option value="${p.id}">${p.label}</option>`).join('');
             photoSelect.value = currentPhotoId && photos.some((p) => p.id === currentPhotoId) ? currentPhotoId : photos[0].id;
+            currentPhotoId = parseInt(photoSelect.value, 10);
         } else {
+            // Only one tagged photo for this part -- use it directly rather than reading
+            // photoSelect.value, which still holds an option (and selection) left over from
+            // whichever other part's multi-photo list last populated it, since this branch never
+            // touches photoSelect's contents. Falling through to that stale value here silently
+            // anchored the mark to a photo from a different part (reproduced: mark a part with
+            // 2+ tagged photos, pick a photo other than the first, close the modal, then open a
+            // part with exactly one tagged photo -- it showed and saved against the wrong photo).
             photoSelect.classList.add('d-none');
+            currentPhotoId = photos[0].id;
         }
-        currentPhotoId = parseInt(photoSelect.value || photos[0].id, 10);
         hasPhoto = true;
 
         canvasWrap.innerHTML = '';
