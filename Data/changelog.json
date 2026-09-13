@@ -1,5 +1,11 @@
 [
   {
+    "date": "2026-09-13",
+    "title": "Feature added: photo export as PDF or zip with metadata and damage pins",
+    "description": "Export selected photos as a PDF or zip file. Each export includes the photo's stage, part, date, and comment thread. Optionally burn damage-mark pins directly into each image before export.",
+    "link": "/Features/8"
+  },
+  {
     "date": "2026-09-10",
     "title": "Feature added: untagged-photo badge on the home page",
     "description": "A small badge on the home page's vehicle tables now shows how many untagged photos each vehicle has, with a link to jump straight to the tagging worklist."
