@@ -1,5 +1,10 @@
 [
   {
+    "date": "2026-09-13",
+    "title": "Feature added: live vehicle search suggestions on the home page",
+    "description": "As you search for a vehicle on the home page, a dropdown now shows matching suggestions in real time, letting you jump straight to the vehicle without waiting for a full search results page."
+  },
+  {
     "date": "2026-09-10",
     "title": "Feature added: untagged-photo badge on the home page",
     "description": "A small badge on the home page's vehicle tables now shows how many untagged photos each vehicle has, with a link to jump straight to the tagging worklist."
