@@ -59,8 +59,8 @@ namespace MainProjectNumoPart.Services
                 VehicleId = vehicleId,
                 Part = part,
                 PhotoId = photoId,
-                XPercent = xPercent,
-                YPercent = yPercent,
+                XPercent = ClampPercent(xPercent),
+                YPercent = ClampPercent(yPercent),
                 Note = trimmed,
                 AuthorId = authorId,
                 AuthorEmail = authorEmail,
@@ -74,6 +74,16 @@ namespace MainProjectNumoPart.Services
 
             return new NoteResult(NoteStatus.Success);
         }
+
+        // wwwroot/css's .damage-mark-canvas-wrap clips with overflow:hidden, so a pin outside
+        // 0-100 on either axis renders invisible and unclickable rather than merely off-centre --
+        // the note would still save but its pin becomes unreachable. Clamped rather than rejected:
+        // a legitimate click right at the image edge can overshoot slightly from floating-point
+        // rect math, and that should still land the pin at the edge, not bounce the whole save.
+        // NaN/Infinity can't come from that click math (only a malformed payload), so those fall
+        // back to dead centre instead of clamping to an arbitrary bound.
+        private static double ClampPercent(double value) =>
+            double.IsFinite(value) ? Math.Clamp(value, 0, 100) : 50;
 
         public async Task<NoteResult> DeleteAsync(int markId, CancellationToken ct = default)
         {

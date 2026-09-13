@@ -148,7 +148,13 @@ namespace MainProjectNumoPart.Services
         // Capped rather than unbounded — this is a "pick the right one" list, not a full browse.
         private const int MaxResults = 25;
 
-        public async Task<List<Vehicle>> FindManyBySearchTermAsync(string? term, CancellationToken ct = default)
+        public Task<List<Vehicle>> FindManyBySearchTermAsync(string? term, CancellationToken ct = default) =>
+            FindManyBySearchTermAsync(term, MaxResults, ct);
+
+        // The `limit` overload backs the search-as-you-type suggestions endpoint (VehicleEndpoints
+        // .MapVehicleEndpoints), which wants a much shorter list than the full "pick the right one"
+        // page above -- everything else about the match logic is identical.
+        public async Task<List<Vehicle>> FindManyBySearchTermAsync(string? term, int limit, CancellationToken ct = default)
         {
             var identifierFragment = NormalizeIdentifier(term);
             if (identifierFragment is null) return new List<Vehicle>();
@@ -161,7 +167,7 @@ namespace MainProjectNumoPart.Services
                     v.Reg!.Contains(identifierFragment) ||
                     (v.MakeModel != null && v.MakeModel.ToUpper().Contains(makeModelFragment)))
                 .OrderByDescending(v => v.CreatedAtUtc)
-                .Take(MaxResults)
+                .Take(limit)
                 .ToListAsync(ct);
         }
     }
