@@ -6,10 +6,13 @@
 }
 
 <div class="search-hero">
-    <form method="get" class="search-form">
-        <input type="text" name="Search" value="@Model.Search" class="form-control form-control-lg"
+    <form method="get" class="search-form position-relative">
+        <input type="text" name="Search" id="vehicle-search-input" value="@Model.Search"
+               class="form-control form-control-lg" autocomplete="off"
                placeholder="Search by VIN, registration, make or model" autofocus />
         <button type="submit" class="btn btn-primary btn-lg">Search</button>
+        <div id="vehicle-search-suggestions"
+             class="list-group position-absolute w-100 d-none" style="z-index:1000; top:100%;"></div>
     </form>
     @if (Model.NotFoundMessage is not null)
     {
@@ -78,3 +81,7 @@
     }
     </tbody>
 </table>
+
+@section Scripts {
+    <script src="~/js/vehiclesearch.js" asp-append-version="true"></script>
+}

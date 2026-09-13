@@ -339,5 +339,57 @@ namespace MainProjectNumoPart.Tests
 
             Assert.Empty(results);
         }
+
+        // Backs the search-as-you-type suggestions endpoint, which wants far fewer rows than the
+        // full "pick the right one" list this method otherwise returns.
+        [Fact]
+        public async Task FindManyBySearchTermAsync_WithLimit_CapsResultsBelowTheDefault()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var service = new VehicleLookupService(db);
+
+            for (var i = 0; i < 5; i++)
+            {
+                var vehicle = await service.FindOrCreateAsync($"1HGBH41JXMN10918{i}", null);
+                vehicle.MakeModel = "Ford Focus";
+            }
+            await db.SaveChangesAsync();
+
+            var results = await service.FindManyBySearchTermAsync("focus", limit: 3);
+
+            Assert.Equal(3, results.Count);
+        }
+
+        [Fact]
+        public async Task FindManyBySearchTermAsync_WithLimit_ReturnsEmptyForBlankTerm()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var service = new VehicleLookupService(db);
+
+            await service.FindOrCreateAsync(null, "AB12CDE");
+            await db.SaveChangesAsync();
+
+            var results = await service.FindManyBySearchTermAsync("   ", limit: 8);
+
+            Assert.Empty(results);
+        }
+
+        [Fact]
+        public async Task FindManyBySearchTermAsync_WithoutLimit_StillDefaultsToTwentyFive()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var service = new VehicleLookupService(db);
+
+            for (var i = 0; i < 30; i++)
+            {
+                var vehicle = await service.FindOrCreateAsync($"1HGBH41JXMN1091{i:D2}", null);
+                vehicle.MakeModel = "Ford Focus";
+            }
+            await db.SaveChangesAsync();
+
+            var results = await service.FindManyBySearchTermAsync("focus");
+
+            Assert.Equal(25, results.Count);
+        }
     }
 }
