@@ -34,6 +34,9 @@ namespace MainProjectNumoPart.Pages
         // Vehicles absent from this dictionary have no untagged photos — see UntaggedPhotoCounts.
         public System.Collections.Generic.Dictionary<int, int> UntaggedCounts { get; set; } = new();
 
+        // Vehicles absent from this dictionary have no photos yet — see VehicleCurrentStage.
+        public System.Collections.Generic.Dictionary<int, Stage> CurrentStage { get; set; } = new();
+
         public async Task<IActionResult> OnGetAsync()
         {
             if (!string.IsNullOrWhiteSpace(Search))
@@ -66,6 +69,7 @@ namespace MainProjectNumoPart.Pages
 
             var vehicleIds = RecentVehicles.Select(v => v.Id).Concat(SearchResults.Select(v => v.Id));
             UntaggedCounts = await Services.UntaggedPhotoCounts.ForVehiclesAsync(_db, vehicleIds);
+            CurrentStage = await Services.VehicleCurrentStage.ForVehiclesAsync(_db, vehicleIds);
 
             return Page();
         }

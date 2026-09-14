@@ -191,5 +191,35 @@ namespace MainProjectNumoPart.Tests
             Assert.All(storage.Originals.Keys, k => Assert.StartsWith("VIN222/", k));
             Assert.All(storage.Thumbnails.Keys, k => Assert.StartsWith("VIN222/", k));
         }
+
+        // The bug this pins: DamageMark.PhotoId is a RESTRICT foreign key, not CASCADE (see
+        // AppDbContext's comment on why), so a mark anchored to one of the vehicle's own photos
+        // used to make the whole deletion throw a DbUpdateException — EF issued "DELETE FROM
+        // Photos" before the Vehicle row (and its DB-level cascade to DamageMarks) had run, and
+        // that Photo delete failed the still-live mark's RESTRICT check. A fresh, second context
+        // against the same database reproduces this: in production, the request that created the
+        // mark and the later request that deletes the vehicle never share a DbContext, so nothing
+        // here has DamageMarks loaded unless the query says so.
+        [Fact]
+        public async Task DeletesAVehicleWithAPhotoAnchoredDamageMark()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var storage = new FakePhotoStorage();
+            var vehicle = SeedVehicle(db, storage, "VIN123", "AB12CDE", photoCount: 1);
+            var photo = db.Photos.Single();
+
+            var marks = new DamageMarkService(db, NullLogger<DamageMarkService>.Instance);
+            var markResult = await marks.AddAsync(
+                vehicle.Id, Part.FrontBumper, photo.Id, 50, 50, "Scratch", "u1", "staff@w.local");
+            Assert.Equal(NoteStatus.Success, markResult.Status);
+
+            using var freshDb = TestDbContextFactory.CreateSecondaryContext(db);
+            var result = await Build(freshDb, storage).DeleteAsync(vehicle.Id, "VIN123");
+
+            Assert.Equal(VehicleDeleteStatus.Deleted, result.Status);
+            Assert.Empty(db.Vehicles);
+            Assert.Empty(db.Photos);
+            Assert.Empty(db.DamageMarks);
+        }
     }
 }

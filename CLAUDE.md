@@ -83,11 +83,32 @@ run would collide with the first's still-open branch. Its prompt has it check wh
 and uses `auto/feature2-<date>` instead, after looking at the first run's PR so it doesn't build the
 same thing twice. Both the evening code review and the deploy routine's prompts know to look for
 either branch — the deploy routine's changelog step in particular loops over each one it finds
-rather than assuming exactly one feature PR per day. `docker-build.yml` deploys on every push to master, so a direct push
-from one of these would trigger an uncoordinated, unreviewed production deploy outside the one
-evening slot meant to own that. Only the evening deploy loop merges application-code PRs to master,
-and only after tests pass and after checking for `MIGRATION NEEDED:` in open PRs from that day
-(those are skipped, left for manual handling).
+rather than assuming exactly one feature PR per day.
+
+`docker-build.yml` deploys on every push to master, so a direct push from one of these would
+trigger an uncoordinated, unreviewed production deploy outside the one evening slot meant to own
+that. Only the evening deploy loop merges application-code PRs to master, and only after tests pass
+and after checking for `MIGRATION NEEDED:` in open PRs from that day (those are skipped, left for
+manual handling).
+
+**GitHub blocks an account from approving its own PR, and every automated PR and review in this
+pipeline is posted by the same account.** A literal GitHub "Approved" review state can therefore
+never appear on one of these PRs — the evening review routine knows this and always leaves its
+verdict as a *commented* review whose body says so explicitly ("GitHub blocks approving your own
+PR... leaving this as a comment rather than a formal approval"). The deploy routine's prompt reads
+that comment's actual recommendation as the approval signal rather than checking for a literal
+"Approved" state (confirmed 2026-09-14 — an earlier, stricter reading of "needs approval" caused a
+whole day's PRs, proposal #8's build included, to sit skipped for no real reason). The deploy
+routine also retries a merge a few times with a short wait if it hits a conflict it just resolved
+and pushed — GitHub's own mergeable-state check can lag behind a push by up to about a minute, and
+giving up on the first "still conflicting" response was mistaking that lag for a real problem.
+
+The feature-building routine caps itself at two branches a day (`auto/feature-<date>` and
+`auto/feature2-<date>`) — if it ever finds both already exist, that means the schedule fired more
+than the expected twice that day (a platform anomaly, not something its own logic causes), and it
+stops rather than opening a third or fourth PR. It also doesn't self-schedule follow-up check-ins on
+a PR after opening it — that's the evening review and deploy routines' job, watching a done PR
+hourly forever just burns tokens for no benefit.
 
 The feature review routine (04:00 SAST) is the one deliberate exception — it pushes a
 `FeatureReviewQueue/` update directly to master, not through a PR (a `docs/BACKLOG.md` update lands

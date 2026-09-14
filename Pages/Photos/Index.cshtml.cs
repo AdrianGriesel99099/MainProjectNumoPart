@@ -40,6 +40,10 @@ namespace MainProjectNumoPart.Pages.Photos
         public int TotalMatchCount { get; set; }
         public bool IsTruncated => TotalMatchCount > Photos.Count;
 
+        public bool HasActiveFilters =>
+            Stage is not null || !string.IsNullOrEmpty(PartFilter) || !string.IsNullOrEmpty(VinOrReg) ||
+            UploadedFrom is not null || UploadedTo is not null || TakenFrom is not null || TakenTo is not null;
+
         public async Task OnGetAsync()
         {
             var untagged = PartFilter == "untagged";
