@@ -55,6 +55,32 @@ namespace MainProjectNumoPart.Services
             return new NoteResult(NoteStatus.Success);
         }
 
+        public async Task<NoteResult> EditAsync(
+            int updateId, string? newBody, CancellationToken ct = default)
+        {
+            var trimmed = newBody?.Trim();
+            if (string.IsNullOrEmpty(trimmed))
+            {
+                return new NoteResult(NoteStatus.EmptyBody, "Enter some text before saving.");
+            }
+            if (trimmed.Length > MaxBodyLength)
+            {
+                return new NoteResult(NoteStatus.TooLong, $"Updates are limited to {MaxBodyLength} characters.");
+            }
+
+            var update = await _db.VehicleUpdates.FindAsync(new object[] { updateId }, ct);
+            if (update is null)
+            {
+                return new NoteResult(NoteStatus.NotFound);
+            }
+
+            update.Body = trimmed;
+            await _db.SaveChangesAsync(ct);
+
+            _logger.LogInformation("Vehicle update {UpdateId} edited", updateId);
+            return new NoteResult(NoteStatus.Success);
+        }
+
         public async Task<NoteResult> DeleteAsync(int updateId, CancellationToken ct = default)
         {
             var update = await _db.VehicleUpdates.FindAsync(new object[] { updateId }, ct);

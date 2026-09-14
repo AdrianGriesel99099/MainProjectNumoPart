@@ -115,5 +115,81 @@ namespace MainProjectNumoPart.Tests
 
             Assert.Equal("gone@w.local", db.PhotoComments.Single().AuthorEmail);
         }
+
+        // The whole point of editing in place rather than delete-and-repost: fixing a typo
+        // shouldn't change who wrote it, when, or where it sits in the thread.
+        [Fact]
+        public async Task EditAsync_ChangesBodyButKeepsAttributionAndTimestamp()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var photo = SeedPhoto(db);
+            await Build(db).AddAsync(photo.Id, "Scratch visible on the bumperr", "u1", "staff@w.local");
+            var original = db.PhotoComments.Single();
+            var originalCreatedAt = original.CreatedAtUtc;
+
+            var result = await Build(db).EditAsync(original.Id, "Scratch visible on the bumper");
+
+            Assert.Equal(NoteStatus.Success, result.Status);
+            var saved = db.PhotoComments.Single();
+            Assert.Equal("Scratch visible on the bumper", saved.Body);
+            Assert.Equal("u1", saved.AuthorId);
+            Assert.Equal("staff@w.local", saved.AuthorEmail);
+            Assert.Equal(originalCreatedAt, saved.CreatedAtUtc);
+        }
+
+        [Fact]
+        public async Task EditAsync_TrimsWhitespace()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var photo = SeedPhoto(db);
+            await Build(db).AddAsync(photo.Id, "text", "u1", "staff@w.local");
+            var id = db.PhotoComments.Single().Id;
+
+            await Build(db).EditAsync(id, "  padded text  ");
+
+            Assert.Equal("padded text", db.PhotoComments.Single().Body);
+        }
+
+        [Theory]
+        [InlineData(null)]
+        [InlineData("")]
+        [InlineData("   ")]
+        public async Task EditAsync_RejectsEmptyBody(string? body)
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var photo = SeedPhoto(db);
+            await Build(db).AddAsync(photo.Id, "original", "u1", "staff@w.local");
+            var id = db.PhotoComments.Single().Id;
+
+            var result = await Build(db).EditAsync(id, body);
+
+            Assert.Equal(NoteStatus.EmptyBody, result.Status);
+            Assert.Equal("original", db.PhotoComments.Single().Body);
+        }
+
+        [Fact]
+        public async Task EditAsync_RejectsBodyOverTheLengthCap()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var photo = SeedPhoto(db);
+            await Build(db).AddAsync(photo.Id, "original", "u1", "staff@w.local");
+            var id = db.PhotoComments.Single().Id;
+            var tooLong = new string('x', PhotoCommentService.MaxBodyLength + 1);
+
+            var result = await Build(db).EditAsync(id, tooLong);
+
+            Assert.Equal(NoteStatus.TooLong, result.Status);
+            Assert.Equal("original", db.PhotoComments.Single().Body);
+        }
+
+        [Fact]
+        public async Task EditAsync_ReturnsNotFoundForUnknownId()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+
+            var result = await Build(db).EditAsync(999, "text");
+
+            Assert.Equal(NoteStatus.NotFound, result.Status);
+        }
     }
 }

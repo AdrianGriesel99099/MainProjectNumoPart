@@ -18,6 +18,8 @@ namespace MainProjectNumoPart.Endpoints
 
         public record AddCommentRequest(string? Body);
 
+        public record EditCommentRequest(string? Body);
+
         public static void MapPhotoEndpoints(this WebApplication app)
         {
             var group = app.MapGroup("/api/photos").RequireAuthorization();
@@ -155,6 +157,25 @@ namespace MainProjectNumoPart.Endpoints
             })
             // Two arguments, never the comma-joined Roles.StaffOrAdmin constant — see the
             // tagging endpoint above for why that silently denies everyone.
+            .RequireAuthorization(policy => policy.RequireRole(Roles.Staff, Roles.Admin));
+
+            group.MapPut("/comments/{commentId:int}", async (
+                int commentId,
+                EditCommentRequest? body,
+                PhotoCommentService comments,
+                CancellationToken ct) =>
+            {
+                var result = await comments.EditAsync(commentId, body?.Body, ct);
+
+                return result.Status switch
+                {
+                    NoteStatus.Success => Results.Ok(),
+                    NoteStatus.NotFound => Results.NotFound(),
+                    _ => Results.BadRequest(result.Message)
+                };
+            })
+            // Same role as adding one -- correcting a typo is routine data entry, not the
+            // destructive action Delete below is reserved for.
             .RequireAuthorization(policy => policy.RequireRole(Roles.Staff, Roles.Admin));
 
             group.MapDelete("/comments/{commentId:int}", async (

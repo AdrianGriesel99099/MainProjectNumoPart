@@ -40,7 +40,14 @@
                         <span class="fw-semibold">@update.AuthorEmail</span>
                         <span class="text-muted small">@update.CreatedAtUtc.ToString("d MMM yyyy, HH:mm")</span>
                     </div>
-                    <p class="mb-1" style="white-space: pre-wrap;">@update.Body</p>
+                    <p class="mb-1 job-update-body" style="white-space: pre-wrap;">@update.Body</p>
+                    @if (User.CanUpload())
+                    {
+                        <textarea class="form-control form-control-sm job-update-edit-body mb-1" rows="2" maxlength="2000" hidden>@update.Body</textarea>
+                        <button type="button" class="btn btn-sm btn-outline-secondary job-update-edit" data-update-id="@update.Id">Edit</button>
+                        <button type="button" class="btn btn-sm btn-primary job-update-save d-none" data-update-id="@update.Id">Save</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary job-update-cancel d-none" data-update-id="@update.Id">Cancel</button>
+                    }
                     @if (User.IsAdmin())
                     {
                         <button type="button" class="btn btn-sm btn-outline-danger job-update-delete" data-update-id="@update.Id">Delete</button>
@@ -79,6 +86,46 @@
                 document.getElementById('update-error').textContent =
                     (await response.text()) || 'Could not post the update.';
             }
+        });
+
+        document.querySelectorAll('.job-update-edit').forEach(btn => {
+            const id = btn.dataset.updateId;
+            const entry = btn.closest('.job-card-entry');
+            const bodyEl = entry.querySelector('.job-update-body');
+            const editEl = entry.querySelector('.job-update-edit-body');
+            const saveBtn = entry.querySelector('.job-update-save');
+            const cancelBtn = entry.querySelector('.job-update-cancel');
+
+            btn.addEventListener('click', () => {
+                editEl.value = bodyEl.textContent;
+                bodyEl.hidden = true;
+                editEl.hidden = false;
+                btn.classList.add('d-none');
+                saveBtn.classList.remove('d-none');
+                cancelBtn.classList.remove('d-none');
+                editEl.focus();
+            });
+
+            cancelBtn.addEventListener('click', () => {
+                bodyEl.hidden = false;
+                editEl.hidden = true;
+                btn.classList.remove('d-none');
+                saveBtn.classList.add('d-none');
+                cancelBtn.classList.add('d-none');
+            });
+
+            saveBtn.addEventListener('click', async () => {
+                const response = await fetch(`/api/vehicles/updates/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ body: editEl.value })
+                });
+                if (response.status === 200) {
+                    window.location.reload();
+                } else {
+                    alert((await response.text()) || 'Could not save the update.');
+                }
+            });
         });
     </script>
 }

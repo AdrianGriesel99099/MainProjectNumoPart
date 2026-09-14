@@ -57,6 +57,32 @@ namespace MainProjectNumoPart.Services
             return new NoteResult(NoteStatus.Success);
         }
 
+        public async Task<NoteResult> EditAsync(
+            int commentId, string? newBody, CancellationToken ct = default)
+        {
+            var trimmed = newBody?.Trim();
+            if (string.IsNullOrEmpty(trimmed))
+            {
+                return new NoteResult(NoteStatus.EmptyBody, "Enter some text before saving.");
+            }
+            if (trimmed.Length > MaxBodyLength)
+            {
+                return new NoteResult(NoteStatus.TooLong, $"Comments are limited to {MaxBodyLength} characters.");
+            }
+
+            var comment = await _db.PhotoComments.FindAsync(new object[] { commentId }, ct);
+            if (comment is null)
+            {
+                return new NoteResult(NoteStatus.NotFound);
+            }
+
+            comment.Body = trimmed;
+            await _db.SaveChangesAsync(ct);
+
+            _logger.LogInformation("Photo comment {CommentId} edited", commentId);
+            return new NoteResult(NoteStatus.Success);
+        }
+
         public async Task<NoteResult> DeleteAsync(int commentId, CancellationToken ct = default)
         {
             var comment = await _db.PhotoComments.FindAsync(new object[] { commentId }, ct);
