@@ -37,6 +37,11 @@ namespace MainProjectNumoPart.Services
     {
         public const int MinQueryLength = 2;
 
+        // A short fragment can match a large fraction of every note ever written; cap each
+        // source query rather than loading an unbounded result set into memory (mirrors
+        // VehicleLookupService.FindManyBySearchTermAsync's MaxResults pattern).
+        private const int MaxResultsPerKind = 50;
+
         private readonly AppDbContext _db;
 
         public NotesSearchService(AppDbContext db)
@@ -66,6 +71,8 @@ namespace MainProjectNumoPart.Services
                     AuthorEmail = u.AuthorEmail,
                     CreatedAtUtc = u.CreatedAtUtc
                 })
+                .OrderByDescending(r => r.CreatedAtUtc)
+                .Take(MaxResultsPerKind)
                 .ToListAsync(ct);
 
             var comments = await _db.PhotoComments
@@ -81,6 +88,8 @@ namespace MainProjectNumoPart.Services
                     AuthorEmail = c.AuthorEmail,
                     CreatedAtUtc = c.CreatedAtUtc
                 })
+                .OrderByDescending(r => r.CreatedAtUtc)
+                .Take(MaxResultsPerKind)
                 .ToListAsync(ct);
 
             var damageMarks = await _db.DamageMarks
@@ -96,6 +105,8 @@ namespace MainProjectNumoPart.Services
                     AuthorEmail = d.AuthorEmail,
                     CreatedAtUtc = d.CreatedAtUtc
                 })
+                .OrderByDescending(r => r.CreatedAtUtc)
+                .Take(MaxResultsPerKind)
                 .ToListAsync(ct);
 
             return updates.Concat(comments).Concat(damageMarks)

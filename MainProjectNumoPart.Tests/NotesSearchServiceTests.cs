@@ -164,6 +164,31 @@ namespace MainProjectNumoPart.Tests
         }
 
         [Fact]
+        public async Task CapsResultsPerKindRatherThanReturningEveryMatch()
+        {
+            const int seeded = 60; // above the 50-per-kind cap
+            using var db = TestDbContextFactory.CreateInMemory();
+            var v = SeedVehicle(db, "VIN008");
+            var now = DateTime.UtcNow;
+            for (var i = 0; i < seeded; i++)
+            {
+                db.VehicleUpdates.Add(new VehicleUpdate
+                {
+                    VehicleId = v.Id, AuthorId = "u1", AuthorEmail = "a@example.com",
+                    Body = $"brake note {i}", CreatedAtUtc = now.AddMinutes(-i)
+                });
+            }
+            db.SaveChanges();
+
+            var results = await new NotesSearchService(db).SearchAsync("brake");
+
+            Assert.Equal(50, results.Count);
+            // The most recent ones (smallest i) should have survived the cap, not an arbitrary subset.
+            Assert.Contains(results, r => r.Snippet == "brake note 0");
+            Assert.DoesNotContain(results, r => r.Snippet == $"brake note {seeded - 1}");
+        }
+
+        [Fact]
         public async Task ResultCarriesVehicleIdentifiersForLinking()
         {
             using var db = TestDbContextFactory.CreateInMemory();
