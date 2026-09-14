@@ -41,7 +41,7 @@
 
 @if (Model.Photos.Count == 0)
 {
-    <p class="text-muted">No photos match these filters.</p>
+    <p class="text-muted">@(Model.HasActiveFilters ? "No photos match these filters." : "No photos have been uploaded yet.")</p>
 }
 else
 {
