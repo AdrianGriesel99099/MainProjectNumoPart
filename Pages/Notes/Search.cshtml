@@ -1,0 +1,55 @@
+@page
+@model MainProjectNumoPart.Pages.Notes.SearchModel
+@using MainProjectNumoPart.Services
+@{
+    ViewData["Title"] = "Search notes";
+}
+
+<h1>Search notes</h1>
+<p class="text-muted">
+    Searches job-card updates, photo comments, and damage-mark notes across every vehicle.
+</p>
+
+<form method="get" class="filter-bar mb-3">
+    <input type="text" name="Query" value="@Model.Query" placeholder="e.g. rust, scratch, warranty"
+           class="form-control form-control-sm" style="width:260px" autofocus />
+    <button type="submit" class="btn btn-sm btn-primary">Search</button>
+</form>
+
+@if (Model.HasSearched)
+{
+    if (Model.Results.Count == 0)
+    {
+        <p class="text-muted">No notes matched "@Model.Query".</p>
+    }
+    else
+    {
+        <p class="text-muted small">@Model.Results.Count matching @(Model.Results.Count == 1 ? "note" : "notes").</p>
+        <ul class="list-group">
+            @foreach (var result in Model.Results)
+            {
+                var identifier = result.VehicleReg ?? result.VehicleVin;
+                var kindLabel = result.Kind switch
+                {
+                    NoteSearchKind.VehicleUpdate => "Job card",
+                    NoteSearchKind.PhotoComment => "Photo comment",
+                    NoteSearchKind.DamageMark => "Damage mark",
+                    _ => result.Kind.ToString()
+                };
+                <li class="list-group-item">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <span class="badge bg-secondary">@kindLabel</span>
+                            <a asp-page="@(result.Kind == NoteSearchKind.PhotoComment ? "/Photos/View" : "/Vehicles/Details")"
+                               asp-route-id="@(result.Kind == NoteSearchKind.PhotoComment ? result.PhotoId : result.VehicleId)">
+                                @identifier
+                            </a>
+                        </div>
+                        <small class="text-muted">@result.CreatedAtUtc.ToString("yyyy-MM-dd HH:mm") UTC &middot; @result.AuthorEmail</small>
+                    </div>
+                    <p class="mb-0 mt-1">@result.Snippet</p>
+                </li>
+            }
+        </ul>
+    }
+}
