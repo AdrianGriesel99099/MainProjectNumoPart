@@ -40,6 +40,11 @@ namespace MainProjectNumoPart.Pages.Photos
         public int TotalMatchCount { get; set; }
         public bool IsTruncated => TotalMatchCount > Photos.Count;
 
+        // Populated when a from/to pair is the wrong way round (a swapped-date typo). The filter
+        // still runs as entered rather than silently correcting it, so this is what tells the user
+        // an empty grid means "fix your dates," not "this vehicle really has nothing here."
+        public List<string> DateRangeWarnings { get; } = new();
+
         public bool HasActiveFilters =>
             Stage is not null || !string.IsNullOrEmpty(PartFilter) || !string.IsNullOrEmpty(VinOrReg) ||
             UploadedFrom is not null || UploadedTo is not null || TakenFrom is not null || TakenTo is not null;
@@ -48,6 +53,15 @@ namespace MainProjectNumoPart.Pages.Photos
         {
             var untagged = PartFilter == "untagged";
             Part? part = !untagged && Enum.TryParse<Part>(PartFilter, out var parsed) ? parsed : null;
+
+            if (UploadedFrom.HasValue && UploadedTo.HasValue && UploadedFrom > UploadedTo)
+            {
+                DateRangeWarnings.Add("The \"Uploaded\" date range is invalid: the first date is after the second. No photos can match until this is fixed.");
+            }
+            if (TakenFrom.HasValue && TakenTo.HasValue && TakenFrom > TakenTo)
+            {
+                DateRangeWarnings.Add("The \"Taken\" date range is invalid: the first date is after the second. No photos can match until this is fixed.");
+            }
 
             var filter = new PhotoFilter
             {
