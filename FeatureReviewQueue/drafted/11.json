@@ -1,0 +1,10 @@
+{
+  "revisedDescription": "On the homescreen, where staff enter a vehicle's registration and VIN, also let them fill in the make and model right there — instead of having to save first and then open Edit just to add it. This just brings that field forward onto the intake screen; nothing about how make/model is stored or shown elsewhere changes.",
+  "readyForFinalApproval": false,
+  "questions": [
+    {
+      "prompt": "Is this the right idea: add a make & model field to the homescreen, next to registration and VIN, so you don't have to edit the vehicle afterward just to set it?",
+      "options": ["Yes, that's it", "Close, but not quite -- see my comment", "No, see my comment"]
+    }
+  ]
+}
