@@ -314,6 +314,13 @@ body {
 .photo-delete:hover { background: rgba(7,9,16,0.92); color: var(--danger); }
 .photo-view { position: absolute; top: 4px; left: 4px; width: 22px; height: 22px; border-radius: 50%; background: rgba(7,9,16,0.75); color: var(--paper); font-size: 0.8rem; line-height: 22px; text-align: center; text-decoration: none; cursor: pointer; }
 .photo-view:hover { background: rgba(7,9,16,0.92); color: var(--ice); }
+/* Neither button carries Bootstrap's .btn class, so they miss the site-wide .btn:focus ring --
+   tabbing through a photo strip landed on them with no visible focus state at all. */
+.photo-delete:focus-visible,
+.photo-view:focus-visible {
+  outline: 2px solid var(--ice);
+  outline-offset: 2px;
+}
 .search-hero { max-width: 600px; margin: 3rem auto 0; }
 .search-form { display: flex; gap: 8px; }
 .filter-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
