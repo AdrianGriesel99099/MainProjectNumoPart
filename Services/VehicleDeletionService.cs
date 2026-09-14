@@ -39,8 +39,18 @@ namespace MainProjectNumoPart.Services
             // and, usefully, because loading them makes EF issue the child DELETEs itself, so
             // correctness no longer rests on the database's ON DELETE CASCADE (present in both
             // providers' migrations, now just a backstop).
+            //
+            // DamageMarks must be Included too, not left to that same DB-level backstop: a mark
+            // anchored to one of this vehicle's own photos (DamageMark.PhotoId) sits behind a
+            // RESTRICT foreign key, not CASCADE (see AppDbContext's comment on why). Without
+            // loading DamageMarks here, EF has no idea they exist and issues "DELETE FROM Photos"
+            // before the Vehicle row (and therefore the DB's Vehicle->DamageMark cascade) has run —
+            // that Photo delete then fails its RESTRICT check against the still-live mark, and the
+            // whole deletion throws. Including them lets EF's own client-side cascade fixup order
+            // the DamageMark deletes ahead of the Photo deletes instead.
             var vehicle = await _db.Vehicles
                 .Include(v => v.Photos)
+                .Include(v => v.DamageMarks)
                 .FirstOrDefaultAsync(v => v.Id == vehicleId, ct);
 
             if (vehicle is null)
