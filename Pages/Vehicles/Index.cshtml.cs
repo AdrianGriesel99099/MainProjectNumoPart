@@ -44,6 +44,7 @@ namespace MainProjectNumoPart.Pages.Vehicles
 
             Vehicles = await _db.Vehicles
                 .OrderByDescending(v => v.CreatedAtUtc)
+                .ThenByDescending(v => v.Id)
                 .Skip((PageNumber - 1) * PageSize)
                 .Take(PageSize)
                 .ToListAsync();
