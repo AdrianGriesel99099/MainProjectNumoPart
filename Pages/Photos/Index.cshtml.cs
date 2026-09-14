@@ -45,6 +45,10 @@ namespace MainProjectNumoPart.Pages.Photos
         // an empty grid means "fix your dates," not "this vehicle really has nothing here."
         public List<string> DateRangeWarnings { get; } = new();
 
+        public bool HasActiveFilters =>
+            Stage is not null || !string.IsNullOrEmpty(PartFilter) || !string.IsNullOrEmpty(VinOrReg) ||
+            UploadedFrom is not null || UploadedTo is not null || TakenFrom is not null || TakenTo is not null;
+
         public async Task OnGetAsync()
         {
             var untagged = PartFilter == "untagged";

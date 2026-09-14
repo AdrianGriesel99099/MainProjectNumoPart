@@ -180,5 +180,27 @@ namespace MainProjectNumoPart.Tests
 
             Assert.Empty(model.DateRangeWarnings);
         }
+
+        [Fact]
+        public async Task OnGetAsync_WithNoQueryParameters_HasNoActiveFilters()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+
+            var model = new IndexModel(db);
+            await model.OnGetAsync();
+
+            Assert.False(model.HasActiveFilters);
+        }
+
+        [Fact]
+        public async Task OnGetAsync_WithAStageFilter_HasActiveFilters()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+
+            var model = new IndexModel(db) { Stage = Stage.Checkin };
+            await model.OnGetAsync();
+
+            Assert.True(model.HasActiveFilters);
+        }
     }
 }
