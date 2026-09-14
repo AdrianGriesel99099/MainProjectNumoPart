@@ -1,6 +1,11 @@
 [
   {
     "date": "2026-09-14",
+    "title": "Feature added: paginated All Vehicles page",
+    "description": "A new /Vehicles page lets you browse all vehicles chronologically, paginated 25 at a time, so you can look through older work without having to search by VIN or registration number."
+  },
+  {
+    "date": "2026-09-14",
     "title": "Feature added: current stage column on vehicle lists",
     "description": "The home page vehicle lists now show each vehicle's current workflow stage (Checkin, Quote, Progress, Checkout, or Extra) based on its most recent photo, so you can see at a glance where it stands without opening the Details page."
   },
