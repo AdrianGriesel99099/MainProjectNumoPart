@@ -46,9 +46,9 @@ namespace MainProjectNumoPart.Tests
         }
 
         // Bulk uploads can land in the same second, so upload timestamp alone doesn't always
-        // order them -- the higher sequence number is the tie-breaker for "shot last".
+        // order them -- Id (insertion order) is the tie-breaker for "shot last".
         [Fact]
-        public async Task WhenUploadedAtTiesTheHigherSequenceNumberWins()
+        public async Task WhenUploadedAtTiesTheLaterInsertedPhotoWins()
         {
             using var db = TestDbContextFactory.CreateInMemory();
             var vehicle = SeedVehicle(db, "V1");
@@ -56,6 +56,25 @@ namespace MainProjectNumoPart.Tests
             var sameInstant = DateTime.UtcNow;
             SeedPhoto(db, vehicle, Stage.Checkin, sameInstant, 1);
             SeedPhoto(db, vehicle, Stage.Checkout, sameInstant, 2);
+            db.SaveChanges();
+
+            var stages = await VehicleCurrentStage.ForVehiclesAsync(db, new[] { vehicle.Id });
+
+            Assert.Equal(Stage.Checkout, stages[vehicle.Id]);
+        }
+
+        // SequenceNumber restarts at 1 for each (VehicleId, Stage) pair, so it can't be the tie
+        // -breaker across different stages -- a vehicle's first Checkout photo (SequenceNumber 1)
+        // ties on SequenceNumber with its 50th Checkin photo. Id, not SequenceNumber, must win.
+        [Fact]
+        public async Task WhenUploadedAtTiesAcrossStagesTheLaterInsertedPhotoWinsNotTheHigherSequenceNumber()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var vehicle = SeedVehicle(db, "V1");
+            db.SaveChanges();
+            var sameInstant = DateTime.UtcNow;
+            for (var i = 1; i <= 50; i++) SeedPhoto(db, vehicle, Stage.Checkin, sameInstant, i);
+            SeedPhoto(db, vehicle, Stage.Checkout, sameInstant, 1);
             db.SaveChanges();
 
             var stages = await VehicleCurrentStage.ForVehiclesAsync(db, new[] { vehicle.Id });

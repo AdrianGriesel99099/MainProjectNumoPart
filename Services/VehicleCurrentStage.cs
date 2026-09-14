@@ -23,15 +23,19 @@ namespace MainProjectNumoPart.Services
 
             var photos = await db.Photos
                 .Where(p => ids.Contains(p.VehicleId))
-                .Select(p => new { p.VehicleId, p.Stage, p.UploadedAtUtc, p.SequenceNumber })
+                .Select(p => new { p.VehicleId, p.Stage, p.UploadedAtUtc, p.Id })
                 .ToListAsync(ct);
 
             return photos
                 .GroupBy(p => p.VehicleId)
                 .ToDictionary(
                     g => g.Key,
+                    // Id, not SequenceNumber, breaks the tie: SequenceNumber restarts at 1 for
+                    // each (VehicleId, Stage) pair (see PhotoSequenceAllocator), so it only
+                    // orders "shot last" correctly within a single stage. Id is a single
+                    // monotonically increasing counter across every stage for the vehicle.
                     g => g.OrderByDescending(p => p.UploadedAtUtc)
-                          .ThenByDescending(p => p.SequenceNumber)
+                          .ThenByDescending(p => p.Id)
                           .First().Stage);
         }
     }
