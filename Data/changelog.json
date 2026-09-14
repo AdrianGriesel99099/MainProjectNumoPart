@@ -1,5 +1,10 @@
 [
   {
+    "date": "2026-09-14",
+    "title": "Feature added: current stage column on vehicle lists",
+    "description": "The home page vehicle lists now show each vehicle's current workflow stage (Checkin, Quote, Progress, Checkout, or Extra) based on its most recent photo, so you can see at a glance where it stands without opening the Details page."
+  },
+  {
     "date": "2026-09-13",
     "title": "Feature added: live vehicle search suggestions on the home page",
     "description": "As you search for a vehicle on the home page, a dropdown now shows matching suggestions in real time, letting you jump straight to the vehicle without waiting for a full search results page."
