@@ -1,0 +1,47 @@
+@page
+@model MainProjectNumoPart.Pages.MyActivityModel
+@using MainProjectNumoPart.Services
+@{
+    ViewData["Title"] = "My activity";
+}
+
+<h2>My activity</h2>
+<p class="text-muted">Everything you uploaded, wrote, or marked on @Model.SelectedDate.ToString("d MMMM yyyy") — a quick end-of-shift check that nothing was missed.</p>
+
+<form method="get" class="filter-bar mb-3">
+    <input type="date" name="Date" value="@Model.SelectedDate.ToString("yyyy-MM-dd")" class="form-control form-control-sm" style="width:170px" />
+    <button type="submit" class="btn btn-sm btn-primary">Show</button>
+    <a asp-page="/MyActivity" class="btn btn-sm btn-outline-secondary">Today</a>
+</form>
+
+@if (Model.Items.Count == 0)
+{
+    <div class="text-muted">Nothing recorded for this day.</div>
+}
+else
+{
+    <ul class="list-group">
+        @foreach (var item in Model.Items)
+        {
+            <li class="list-group-item d-flex justify-content-between align-items-start gap-3">
+                <div>
+                    <span class="badge bg-secondary me-2">@KindLabel(item.Kind)</span>
+                    <a asp-page="/Vehicles/Details" asp-route-id="@item.VehicleId">@item.VehicleLabel</a>
+                    <div class="small text-muted">@item.Summary</div>
+                </div>
+                <span class="text-muted small text-nowrap">@item.TimestampUtc.ToLocalTime().ToString("HH:mm")</span>
+            </li>
+        }
+    </ul>
+}
+
+@functions {
+    string KindLabel(MyActivityKind kind) => kind switch
+    {
+        MyActivityKind.PhotoUpload => "Upload",
+        MyActivityKind.VehicleUpdate => "Job card",
+        MyActivityKind.PhotoComment => "Comment",
+        MyActivityKind.DamageMark => "Damage mark",
+        _ => kind.ToString()
+    };
+}

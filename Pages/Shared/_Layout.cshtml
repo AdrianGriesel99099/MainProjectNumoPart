@@ -41,6 +41,12 @@
                         <li class="nav-item">
                             <a class="nav-link" asp-area="" asp-page="/Photos/Index">All Photos</a>
                         </li>
+                        @if (User.CanUpload())
+                        {
+                            <li class="nav-item">
+                                <a class="nav-link" asp-area="" asp-page="/MyActivity">My Activity</a>
+                            </li>
+                        }
                         <li class="nav-item">
                             <a class="nav-link" asp-area="" asp-page="/Changelog">What's New</a>
                         </li>
