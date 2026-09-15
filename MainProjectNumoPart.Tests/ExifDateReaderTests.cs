@@ -58,5 +58,39 @@ namespace MainProjectNumoPart.Tests
 
             Assert.Null(result);
         }
+
+        // A truncated or malformed EXIF/IFD segment in an otherwise-valid JPEG can trip
+        // MetadataExtractor's own IO/format exceptions while parsing that segment, not just
+        // ImageProcessingException (which only covers a genuinely unsupported format). Reproduced
+        // here with a stream whose Read always throws, rather than hand-crafting a specific
+        // corrupt byte sequence MetadataExtractor happens to choke on today — what matters is
+        // this method's contract ("best-effort date, null if it can't be read"), not which
+        // internal exception type a particular malformed file trips. Upload.cshtml.cs has no
+        // try/catch of its own around this call, so anything besides ImageProcessingException
+        // escaping here used to fail the entire upload batch instead of leaving just this one
+        // photo's "Taken" as "Not recorded".
+        [Fact]
+        public void TryReadDateTaken_ReturnsNullWhenParsingThrowsANonImageProcessingException()
+        {
+            using var stream = new ThrowingStream(new IndexOutOfRangeException("simulated malformed IFD offset"));
+
+            var result = ExifDateReader.TryReadDateTaken(stream);
+
+            Assert.Null(result);
+        }
+
+        private sealed class ThrowingStream : MemoryStream
+        {
+            private readonly Exception _exception;
+
+            public ThrowingStream(Exception exception) : base(new byte[] { 0xFF, 0xD8, 0xFF, 0xE1 })
+            {
+                _exception = exception;
+            }
+
+            public override int Read(byte[] buffer, int offset, int count) => throw _exception;
+
+            public override int ReadByte() => throw _exception;
+        }
     }
 }

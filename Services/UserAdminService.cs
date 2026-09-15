@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
 using MainProjectNumoPart.Authorization;
+using MainProjectNumoPart.Data;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -36,11 +38,13 @@ namespace MainProjectNumoPart.Services
     public class UserAdminService
     {
         private readonly UserManager<IdentityUser> _userManager;
+        private readonly AppDbContext _db;
         private readonly ILogger<UserAdminService> _logger;
 
-        public UserAdminService(UserManager<IdentityUser> userManager, ILogger<UserAdminService> logger)
+        public UserAdminService(UserManager<IdentityUser> userManager, AppDbContext db, ILogger<UserAdminService> logger)
         {
             _userManager = userManager;
+            _db = db;
             _logger = logger;
         }
 
@@ -99,7 +103,20 @@ namespace MainProjectNumoPart.Services
             // IS the actor and guard 1 already caught it. Kept because it is the invariant that
             // actually matters, and it becomes load-bearing the moment a delete-user path or any
             // non-interactive role change is added.
-            if (currentRoles.Contains(Roles.Admin) && newRole != Roles.Admin)
+            //
+            // The count check and the mutation below are two separate round-trips, so two admins
+            // demoting each other (or being demoted/deleted) at almost the same moment could both
+            // pass this check before either commits, leaving zero admins — the exact thing this
+            // guard exists to prevent. Serializable + a re-check right after the write closes that
+            // window: on SQLite (dev/test) the engine already serializes all writers, so the
+            // second transaction's re-check sees the first one's committed change; on SQL Server
+            // (production) Serializable isolation forces the same ordering via range locks.
+            var removingAdmin = currentRoles.Contains(Roles.Admin) && newRole != Roles.Admin;
+            using var transaction = removingAdmin
+                ? await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable)
+                : null;
+
+            if (removingAdmin)
             {
                 var admins = await _userManager.GetUsersInRoleAsync(Roles.Admin);
                 if (admins.Count <= 1)
@@ -121,9 +138,20 @@ namespace MainProjectNumoPart.Services
             var added = await _userManager.AddToRoleAsync(user, newRole);
             if (!added.Succeeded) return Failure(added);
 
+            if (removingAdmin && (await _userManager.GetUsersInRoleAsync(Roles.Admin)).Count == 0)
+            {
+                // A concurrent demote/delete of another admin won its own race and committed
+                // between our check above and this write — abort rather than finish leaving zero
+                // admins. The `using` on `transaction` rolls this attempt's role change back.
+                return new UserAdminResult(UserAdminStatus.CannotRemoveLastAdmin,
+                    "This is the last Admin account. Promote another user to Admin first.");
+            }
+
             // Without this the target's existing auth cookie keeps its old role claims until the
             // validator's next re-check. See the SecurityStampValidatorOptions comment in Program.cs.
             await _userManager.UpdateSecurityStampAsync(user);
+
+            if (transaction is not null) await transaction.CommitAsync();
 
             _logger.LogInformation(
                 "Role change: {TargetEmail} ({TargetId}) {OldRoles} -> {NewRole}, by {ActorId}",
@@ -152,9 +180,16 @@ namespace MainProjectNumoPart.Services
             }
 
             // Same invariant ChangeRoleAsync protects, and the comment there predicted this reuse:
-            // never leave the system with zero admins.
+            // never leave the system with zero admins. Same TOCTOU risk too — see ChangeRoleAsync's
+            // comment on why this needs a Serializable transaction and a post-write re-check rather
+            // than just the up-front count check.
             var currentRoles = await _userManager.GetRolesAsync(user);
-            if (currentRoles.Contains(Roles.Admin))
+            var deletingAdmin = currentRoles.Contains(Roles.Admin);
+            using var transaction = deletingAdmin
+                ? await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable)
+                : null;
+
+            if (deletingAdmin)
             {
                 var admins = await _userManager.GetUsersInRoleAsync(Roles.Admin);
                 if (admins.Count <= 1)
@@ -171,6 +206,16 @@ namespace MainProjectNumoPart.Services
             // VehicleUpdate.AuthorEmail, captured at write time for exactly this reason).
             var deleted = await _userManager.DeleteAsync(user);
             if (!deleted.Succeeded) return Failure(deleted);
+
+            if (deletingAdmin && (await _userManager.GetUsersInRoleAsync(Roles.Admin)).Count == 0)
+            {
+                // A concurrent demote/delete of another admin committed between our check above
+                // and this delete — abort. `using` on `transaction` rolls this delete back.
+                return new UserAdminResult(UserAdminStatus.CannotRemoveLastAdmin,
+                    "This is the last Admin account. Promote another user to Admin first.");
+            }
+
+            if (transaction is not null) await transaction.CommitAsync();
 
             _logger.LogInformation("User deleted: {Email} ({UserId}), by {ActorId}",
                 user.Email, user.Id, actingUserId);

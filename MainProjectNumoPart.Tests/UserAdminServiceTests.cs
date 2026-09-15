@@ -1,6 +1,7 @@
 using System.Linq;
 using System.Threading.Tasks;
 using MainProjectNumoPart.Authorization;
+using MainProjectNumoPart.Data;
 using MainProjectNumoPart.Services;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
@@ -26,7 +27,8 @@ namespace MainProjectNumoPart.Tests
             }
 
             var users = scope.ServiceProvider.GetRequiredService<UserManager<IdentityUser>>();
-            var service = new UserAdminService(users, NullLogger<UserAdminService>.Instance);
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var service = new UserAdminService(users, db, NullLogger<UserAdminService>.Instance);
 
             return (service, users, scope);
         }
