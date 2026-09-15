@@ -1,6 +1,12 @@
 [
   {
     "date": "2026-09-15",
+    "title": "Feature added: Wheel alignment and Diagnostics photo stages",
+    "description": "Two new photo stages have been added to the photo workflow — Wheel alignment and Diagnostics — so photos taken during those specific parts of a job now get their own dedicated grouping instead of being lumped into the Extra category.",
+    "link": "/Features/9"
+  },
+  {
+    "date": "2026-09-15",
     "title": "Feature added: search filter on the All vehicles page",
     "description": "The /Vehicles page now has a search box to filter the list by VIN/Reg fragment or make/model substring, so you can find a specific vehicle without paging through 25 at a time."
   },
