@@ -5,7 +5,27 @@
 }
 
 <h3>All vehicles</h3>
-<p class="text-muted small">@Model.TotalCount vehicle@(Model.TotalCount == 1 ? "" : "s") total.</p>
+
+<form method="get" class="row g-2 align-items-center mb-3">
+    <div class="col-auto">
+        <input type="text" name="Search" value="@Model.Search" class="form-control"
+               placeholder="Search VIN, Reg or Make/Model" />
+    </div>
+    <div class="col-auto">
+        <button type="submit" class="btn btn-outline-secondary">Search</button>
+    </div>
+    @if (!string.IsNullOrWhiteSpace(Model.Search))
+    {
+        <div class="col-auto">
+            <a asp-page="/Vehicles/Index" class="btn btn-link">Clear</a>
+        </div>
+    }
+</form>
+
+<p class="text-muted small">
+    @Model.TotalCount vehicle@(Model.TotalCount == 1 ? "" : "s")
+    @(string.IsNullOrWhiteSpace(Model.Search) ? "total." : $"matching \"{Model.Search}\".")
+</p>
 
 <table class="table">
     <thead><tr><th>VIN</th><th>Reg</th><th>Make/Model</th><th>Added</th><th>Tagging</th></tr></thead>
@@ -36,13 +56,13 @@
     <nav aria-label="Vehicle list pages">
         <ul class="pagination">
             <li class="page-item @(Model.PageNumber <= 1 ? "disabled" : "")">
-                <a class="page-link" asp-page="/Vehicles/Index" asp-route-PageNumber="@(Model.PageNumber - 1)">Previous</a>
+                <a class="page-link" asp-page="/Vehicles/Index" asp-route-PageNumber="@(Model.PageNumber - 1)" asp-route-Search="@Model.Search">Previous</a>
             </li>
             <li class="page-item disabled">
                 <span class="page-link">Page @Model.PageNumber of @Model.TotalPages</span>
             </li>
             <li class="page-item @(Model.PageNumber >= Model.TotalPages ? "disabled" : "")">
-                <a class="page-link" asp-page="/Vehicles/Index" asp-route-PageNumber="@(Model.PageNumber + 1)">Next</a>
+                <a class="page-link" asp-page="/Vehicles/Index" asp-route-PageNumber="@(Model.PageNumber + 1)" asp-route-Search="@Model.Search">Next</a>
             </li>
         </ul>
     </nav>

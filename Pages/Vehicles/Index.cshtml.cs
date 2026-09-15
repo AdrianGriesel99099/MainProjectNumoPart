@@ -29,6 +29,11 @@ namespace MainProjectNumoPart.Pages.Vehicles
         [BindProperty(SupportsGet = true)]
         public int PageNumber { get; set; } = 1;
 
+        // A VIN/Reg fragment (matched the same way as the home page search) or a Make/Model
+        // fragment — narrows the browse list instead of paging through everything by hand.
+        [BindProperty(SupportsGet = true)]
+        public string? Search { get; set; }
+
         public List<Vehicle> Vehicles { get; set; } = new();
         public int TotalCount { get; set; }
         public int TotalPages => (int)Math.Ceiling(TotalCount / (double)PageSize);
@@ -40,9 +45,21 @@ namespace MainProjectNumoPart.Pages.Vehicles
         {
             if (PageNumber < 1) PageNumber = 1;
 
-            TotalCount = await _db.Vehicles.CountAsync();
+            var query = _db.Vehicles.AsQueryable();
 
-            Vehicles = await _db.Vehicles
+            var identifierFragment = Services.VehicleLookupService.NormalizeIdentifier(Search);
+            if (identifierFragment is not null)
+            {
+                var makeModelFragment = Search!.Trim().ToUpperInvariant();
+                query = query.Where(v =>
+                    (v.Vin != null && v.Vin.Contains(identifierFragment)) ||
+                    (v.Reg != null && v.Reg.Contains(identifierFragment)) ||
+                    (v.MakeModel != null && v.MakeModel.ToUpper().Contains(makeModelFragment)));
+            }
+
+            TotalCount = await query.CountAsync();
+
+            Vehicles = await query
                 .OrderByDescending(v => v.CreatedAtUtc)
                 .ThenByDescending(v => v.Id)
                 .Skip((PageNumber - 1) * PageSize)
