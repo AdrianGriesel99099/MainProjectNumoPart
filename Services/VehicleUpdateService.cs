@@ -55,12 +55,17 @@ namespace MainProjectNumoPart.Services
             return new NoteResult(NoteStatus.Success);
         }
 
-        public async Task<NoteResult> DeleteAsync(int updateId, CancellationToken ct = default)
+        public async Task<NoteResult> DeleteAsync(
+            int updateId, string requesterId, bool requesterIsAdmin, CancellationToken ct = default)
         {
             var update = await _db.VehicleUpdates.FindAsync(new object[] { updateId }, ct);
             if (update is null)
             {
                 return new NoteResult(NoteStatus.NotFound);
+            }
+            if (!requesterIsAdmin && update.AuthorId != requesterId)
+            {
+                return new NoteResult(NoteStatus.Forbidden);
             }
 
             _db.VehicleUpdates.Remove(update);

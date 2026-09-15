@@ -85,12 +85,17 @@ namespace MainProjectNumoPart.Services
         private static double ClampPercent(double value) =>
             double.IsFinite(value) ? Math.Clamp(value, 0, 100) : 50;
 
-        public async Task<NoteResult> DeleteAsync(int markId, CancellationToken ct = default)
+        public async Task<NoteResult> DeleteAsync(
+            int markId, string requesterId, bool requesterIsAdmin, CancellationToken ct = default)
         {
             var mark = await _db.DamageMarks.FindAsync(new object[] { markId }, ct);
             if (mark is null)
             {
                 return new NoteResult(NoteStatus.NotFound);
+            }
+            if (!requesterIsAdmin && mark.AuthorId != requesterId)
+            {
+                return new NoteResult(NoteStatus.Forbidden);
             }
 
             _db.DamageMarks.Remove(mark);

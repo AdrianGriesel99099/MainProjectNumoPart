@@ -178,17 +178,45 @@ namespace MainProjectNumoPart.Tests
         }
 
         [Fact]
-        public async Task DeleteAsync_RemovesTheMark()
+        public async Task DeleteAsync_AllowsTheAuthorToRemoveTheirOwnMark()
         {
             using var db = TestDbContextFactory.CreateInMemory();
             var vehicle = SeedVehicle(db);
             await Build(db).AddAsync(vehicle.Id, Part.FrontBumper, null, 50, 50, "text", "u1", "staff@w.local");
             var id = db.DamageMarks.Single().Id;
 
-            var result = await Build(db).DeleteAsync(id);
+            var result = await Build(db).DeleteAsync(id, "u1", requesterIsAdmin: false);
 
             Assert.Equal(NoteStatus.Success, result.Status);
             Assert.Empty(db.DamageMarks);
+        }
+
+        [Fact]
+        public async Task DeleteAsync_AllowsAnAdminToRemoveSomeoneElsesMark()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var vehicle = SeedVehicle(db);
+            await Build(db).AddAsync(vehicle.Id, Part.FrontBumper, null, 50, 50, "text", "u1", "staff@w.local");
+            var id = db.DamageMarks.Single().Id;
+
+            var result = await Build(db).DeleteAsync(id, "admin1", requesterIsAdmin: true);
+
+            Assert.Equal(NoteStatus.Success, result.Status);
+            Assert.Empty(db.DamageMarks);
+        }
+
+        [Fact]
+        public async Task DeleteAsync_RejectsANonAdminDeletingSomeoneElsesMark()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var vehicle = SeedVehicle(db);
+            await Build(db).AddAsync(vehicle.Id, Part.FrontBumper, null, 50, 50, "text", "u1", "staff@w.local");
+            var id = db.DamageMarks.Single().Id;
+
+            var result = await Build(db).DeleteAsync(id, "u2", requesterIsAdmin: false);
+
+            Assert.Equal(NoteStatus.Forbidden, result.Status);
+            Assert.Single(db.DamageMarks);
         }
 
         [Fact]
@@ -196,7 +224,7 @@ namespace MainProjectNumoPart.Tests
         {
             using var db = TestDbContextFactory.CreateInMemory();
 
-            var result = await Build(db).DeleteAsync(999);
+            var result = await Build(db).DeleteAsync(999, "u1", requesterIsAdmin: false);
 
             Assert.Equal(NoteStatus.NotFound, result.Status);
         }
