@@ -10,7 +10,8 @@ namespace MainProjectNumoPart.Services
         Success,
         NotFound,
         EmptyBody,
-        TooLong
+        TooLong,
+        Forbidden
     }
 
     public record NoteResult(NoteStatus Status, string? Message = null);

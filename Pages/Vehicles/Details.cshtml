@@ -41,7 +41,7 @@
                         <span class="text-muted small">@update.CreatedAtUtc.ToString("d MMM yyyy, HH:mm")</span>
                     </div>
                     <p class="mb-1" style="white-space: pre-wrap;">@update.Body</p>
-                    @if (User.IsAdmin())
+                    @if (User.CanDeleteNote(update.AuthorId))
                     {
                         <button type="button" class="btn btn-sm btn-outline-danger job-update-delete" data-update-id="@update.Id">Delete</button>
                     }
@@ -83,7 +83,7 @@
     </script>
 }
 
-@if (User.IsAdmin())
+@if (User.CanUpload())
 {
     <script>
         document.querySelectorAll('.job-update-delete').forEach(btn => {
@@ -155,7 +155,7 @@
                         </div>
                         <p class="mb-1 small" style="white-space: pre-wrap;">@mark.Note</p>
                         <span class="text-muted small">@mark.AuthorEmail</span>
-                        @if (User.IsAdmin())
+                        @if (User.CanDeleteNote(mark.AuthorId))
                         {
                             <button type="button" class="btn btn-sm btn-outline-danger damage-mark-delete ms-2" data-mark-id="@mark.Id">Delete</button>
                         }
@@ -211,7 +211,8 @@
         // popup for a different part is instant client-side filtering, not another round-trip.
         window.__damageMarksData = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.DamageMarksNewestFirst.Select(m => new {
             id = m.Id, part = m.Part.ToString(), photoId = m.PhotoId,
-            xPercent = m.XPercent, yPercent = m.YPercent, note = m.Note, authorEmail = m.AuthorEmail
+            xPercent = m.XPercent, yPercent = m.YPercent, note = m.Note, authorEmail = m.AuthorEmail,
+            authorId = m.AuthorId
         })));
         window.__vehiclePhotosData = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Vehicle.Photos
             .Where(p => p.Part.HasValue)
@@ -219,6 +220,7 @@
             .Select(p => new { id = p.Id, part = p.Part!.Value.ToString(), label = p.Stage + " #" + p.SequenceNumber.ToString("000") })));
         window.__vehicleId = @Model.Vehicle.Id;
         window.__isAdmin = @Json.Serialize(User.IsAdmin());
+        window.__currentUserId = @Json.Serialize(User.CurrentUserId());
         window.__canMarkDamage = @Json.Serialize(User.CanUpload());
     </script>
     <script src="~/js/damagemarks.js"></script>
