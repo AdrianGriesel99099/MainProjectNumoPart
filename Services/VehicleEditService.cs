@@ -2,6 +2,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using MainProjectNumoPart.Data;
 using MainProjectNumoPart.Models;
+using Microsoft.Data.Sqlite;
+using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -92,7 +94,35 @@ namespace MainProjectNumoPart.Services
             // — the folder name is an immutable storage key, not a display value. It stops matching
             // the VIN after a correction, which is expected and harmless.
 
-            await _db.SaveChangesAsync(ct);
+            try
+            {
+                await _db.SaveChangesAsync(ct);
+            }
+            catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
+            {
+                // The AnyAsync checks above are a separate round-trip from this save, so two
+                // concurrent edits that both pass the pre-check (neither sees the other's
+                // not-yet-committed VIN/Reg) can still collide here — the loser hits the unique
+                // index instead of getting the friendly conflict message. Recover the same way
+                // instead of letting a DbUpdateException reach the page as a 500.
+                _db.ChangeTracker.Clear();
+
+                if (normalizedVin is not null
+                    && await _db.Vehicles.AnyAsync(v => v.Vin == normalizedVin && v.Id != vehicleId, ct))
+                {
+                    return new VehicleEditResult(VehicleEditStatus.VinConflict,
+                        $"VIN '{normalizedVin}' already belongs to another vehicle.");
+                }
+
+                if (normalizedReg is not null
+                    && await _db.Vehicles.AnyAsync(v => v.Reg == normalizedReg && v.Id != vehicleId, ct))
+                {
+                    return new VehicleEditResult(VehicleEditStatus.RegConflict,
+                        $"Registration '{normalizedReg}' already belongs to another vehicle.");
+                }
+
+                throw;
+            }
 
             _logger.LogInformation(
                 "Vehicle {VehicleId} edited by {EditorId}: Vin {OldVin}->{NewVin}, Reg {OldReg}->{NewReg}",
@@ -100,5 +130,13 @@ namespace MainProjectNumoPart.Services
 
             return new VehicleEditResult(VehicleEditStatus.Updated);
         }
+
+        // Same detection VehicleLookupService.IsUniqueConstraintViolation and Upload.cshtml.cs's
+        // IsSequenceConflict already need: the provider-specific exception EF Core wraps in
+        // DbUpdateException differs between SQLite (dev/test) and SQL Server (production), and
+        // both need recognising here or this catch would silently only work in dev.
+        private static bool IsUniqueConstraintViolation(DbUpdateException ex) =>
+            ex.InnerException is SqliteException { SqliteExtendedErrorCode: 2067 }
+            || ex.InnerException is SqlException { Number: 2627 or 2601 };
     }
 }
