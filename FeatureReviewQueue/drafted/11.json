@@ -1,0 +1,10 @@
+{
+  "revisedDescription": "When adding a vehicle by registration and VIN on the home screen, there's currently no way to enter the make and model at the same time — you have to save first, then open the vehicle again just to edit those in. This would add make and model fields right there on that same home-screen entry step.",
+  "readyForFinalApproval": false,
+  "questions": [
+    {
+      "prompt": "Is this the right idea: add make and model fields to the home-screen vehicle entry, alongside registration and VIN?",
+      "options": ["Yes, that's it", "Close, but not quite -- see my comment", "No, see my comment"]
+    }
+  ]
+}

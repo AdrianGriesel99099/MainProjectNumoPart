@@ -1,0 +1,10 @@
+{
+  "revisedDescription": "Right now every photo (or file) upload requires picking a vehicle first. This would let someone upload a photo immediately without choosing a vehicle up front, then go back afterward and fill in the vehicle details by editing that upload.",
+  "readyForFinalApproval": false,
+  "questions": [
+    {
+      "prompt": "Is this the right idea: let someone upload a photo or file first, then add the vehicle details afterward by editing it?",
+      "options": ["Yes, that's it", "Close, but not quite -- see my comment", "No, see my comment"]
+    }
+  ]
+}
