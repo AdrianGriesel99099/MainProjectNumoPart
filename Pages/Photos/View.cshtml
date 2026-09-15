@@ -55,7 +55,7 @@
                     <span class="text-muted small">@comment.CreatedAtUtc.ToString("d MMM yyyy, HH:mm")</span>
                 </div>
                 <p class="mb-1" style="white-space: pre-wrap;">@comment.Body</p>
-                @if (User.IsAdmin())
+                @if (User.CanDeleteNote(comment.AuthorId))
                 {
                     <button type="button" class="btn btn-sm btn-outline-danger comment-delete" data-comment-id="@comment.Id">Delete</button>
                 }
@@ -93,7 +93,7 @@
     </script>
 }
 
-@if (User.IsAdmin())
+@if (User.CanUpload())
 {
     <script>
         document.querySelectorAll('.comment-delete').forEach(btn => {
