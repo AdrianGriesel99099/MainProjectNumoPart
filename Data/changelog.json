@@ -1,5 +1,10 @@
 [
   {
+    "date": "2026-09-15",
+    "title": "Feature added: search filter on the All vehicles page",
+    "description": "The /Vehicles page now has a search box to filter the list by VIN/Reg fragment or make/model substring, so you can find a specific vehicle without paging through 25 at a time."
+  },
+  {
     "date": "2026-09-14",
     "title": "Feature added: paginated All Vehicles page",
     "description": "A new /Vehicles page lets you browse all vehicles chronologically, paginated 25 at a time, so you can look through older work without having to search by VIN or registration number."
