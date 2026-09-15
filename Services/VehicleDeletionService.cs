@@ -80,7 +80,24 @@ namespace MainProjectNumoPart.Services
                 await _storage.DeleteThumbnailAsync(photo.BlobPathThumbnail, ct);
             }
 
-            var photoCount = vehicle.Photos.Count;
+            // A photo uploaded to this same vehicle after the Include above but before the
+            // SaveChangesAsync below wouldn't be in vehicle.Photos, so the loop just above never
+            // touches its blobs — yet the DB's own ON DELETE CASCADE (the backstop the comment at
+            // the top of this method mentions) would still silently remove its Photo row the
+            // moment the Vehicle row goes, leaving a real, already-uploaded blob with no DB row
+            // pointing at it any more: exactly the "costs money forever" outcome this method
+            // otherwise orders itself to avoid. Re-checking right before the row delete shrinks
+            // that window from "however long the blob-deletion loop above took" down to one query.
+            var lateArrivals = await _db.Photos
+                .Where(p => p.VehicleId == vehicleId && !vehicle.Photos.Select(existing => existing.Id).Contains(p.Id))
+                .ToListAsync(ct);
+            foreach (var photo in lateArrivals)
+            {
+                await _storage.DeleteOriginalAsync(photo.BlobPathOriginal, ct);
+                await _storage.DeleteThumbnailAsync(photo.BlobPathThumbnail, ct);
+            }
+
+            var photoCount = vehicle.Photos.Count + lateArrivals.Count;
 
             _db.Vehicles.Remove(vehicle);
             await _db.SaveChangesAsync(ct);
