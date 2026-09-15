@@ -18,6 +18,8 @@ namespace MainProjectNumoPart.Endpoints
 
         public record AddCommentRequest(string? Body);
 
+        public record ExportPhotosRequest(int[]? Ids, Services.PhotoExportFormat? Format, bool IncludeDamageMarks);
+
         public static void MapPhotoEndpoints(this WebApplication app)
         {
             var group = app.MapGroup("/api/photos").RequireAuthorization();
@@ -131,6 +133,24 @@ namespace MainProjectNumoPart.Endpoints
                 }
 
                 return Results.Empty;
+            });
+
+            group.MapPost("/export", async (
+                ExportPhotosRequest? body, HttpResponse response, Services.PhotoExportService exporter, CancellationToken ct) =>
+            {
+                if (body?.Ids is null || body.Ids.Length == 0) return Results.BadRequest("No photos selected.");
+
+                var result = await exporter.ExportAsync(
+                    body.Ids, body.Format ?? Services.PhotoExportFormat.Pdf, body.IncludeDamageMarks, ct);
+
+                if (result.Status != Services.PhotoExportStatus.Success)
+                {
+                    return Results.BadRequest(result.Message ?? "Could not export the selected photos.");
+                }
+
+                response.ContentType = result.ContentType!;
+                response.Headers.ContentDisposition = $"attachment; filename=\"{result.FileName}\"";
+                return Results.Bytes(result.Content!, result.ContentType);
             });
 
             group.MapPost("/{id:int}/comments", async (

@@ -11,6 +11,12 @@
   },
   {
     "date": "2026-09-13",
+    "title": "Feature added: photo export as PDF or zip with metadata and damage pins",
+    "description": "Export selected photos as a PDF or zip file. Each export includes the photo's stage, part, date, and comment thread. Optionally burn damage-mark pins directly into each image before export.",
+    "link": "/Features/8"
+  },
+  {
+    "date": "2026-09-13",
     "title": "Feature added: live vehicle search suggestions on the home page",
     "description": "As you search for a vehicle on the home page, a dropdown now shows matching suggestions in real time, letting you jump straight to the vehicle without waiting for a full search results page."
   },
