@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Azure;
 using Azure.Storage.Blobs.Models;
+using SixLabors.ImageSharp;
 using MainProjectNumoPart.Authorization;
 using MainProjectNumoPart.Data;
 using MainProjectNumoPart.Models;
@@ -171,6 +172,7 @@ namespace MainProjectNumoPart.Pages
             for (var attempt = 1; attempt <= maxAttempts; attempt++)
             {
                 var uploadedBlobPaths = new List<(string original, string? thumbnail)>();
+                IFormFile? currentFile = null; // tracked for the ImageFormatException message below
 
                 try
                 {
@@ -178,6 +180,7 @@ namespace MainProjectNumoPart.Pages
 
                     foreach (var file in Files)
                     {
+                        currentFile = file;
                         var sequenceNumber = nextSequenceNumber++;
                         var originalExtension = Path.GetExtension(file.FileName);
                         var originalFileName = PhotoNaming.BuildFileName(vehicle.Vin, vehicle.Reg, sequenceNumber, originalExtension);
@@ -240,6 +243,23 @@ namespace MainProjectNumoPart.Pages
                     // freshly-read sequence number.
                     await CleanUpBlobsAsync(uploadedBlobPaths);
                     _db.ChangeTracker.Clear(); // discard this attempt's tracked-but-unsaved Photo rows
+                }
+                catch (ImageFormatException)
+                {
+                    // The Content-Type/size checks above only look at what the browser CLAIMS the
+                    // file is -- both are client-supplied and easy to satisfy with a corrupted or
+                    // truncated file (an interrupted upload from a phone, a partially-transferred
+                    // camera file). ThumbnailGenerator's Image.LoadAsync is what actually tries to
+                    // decode the bytes, and it throws this (a base type covering both
+                    // UnknownImageFormatException and InvalidImageContentException) when they
+                    // aren't a real, complete image -- without this catch that propagated as an
+                    // unhandled 500 instead of the same friendly validation message every other
+                    // rejected file in this method gets. Not retried: the file itself is the
+                    // problem, not a race with another request.
+                    await CleanUpBlobsAsync(uploadedBlobPaths);
+                    _db.ChangeTracker.Clear();
+                    ErrorMessage = $"{currentFile?.FileName}: could not be read as a valid image. The file may be corrupted or incomplete.";
+                    return Page();
                 }
                 catch
                 {

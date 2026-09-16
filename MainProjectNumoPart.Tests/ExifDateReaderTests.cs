@@ -58,5 +58,21 @@ namespace MainProjectNumoPart.Tests
 
             Assert.Null(result);
         }
+
+        [Fact]
+        public void TryReadDateTaken_ReturnsNullRatherThanThrowing_ForATruncatedJpeg()
+        {
+            // A real JPEG SOI marker with nothing after it -- e.g. an upload interrupted partway
+            // through. MetadataExtractor.ImageMetadataReader throws IOException for this specific
+            // shape (confirmed directly against this package version), NOT the ImageProcessingException
+            // the method already handled -- previously this propagated out of TryReadDateTaken and
+            // crashed the whole upload with an unhandled 500 instead of the friendly per-file
+            // validation error Upload.cshtml.cs shows for every other rejected file.
+            using var stream = new MemoryStream(new byte[] { 0xFF, 0xD8, 0xFF, 0xE0 });
+
+            var result = ExifDateReader.TryReadDateTaken(stream);
+
+            Assert.Null(result);
+        }
     }
 }
