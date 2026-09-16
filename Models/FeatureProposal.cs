@@ -22,6 +22,11 @@ namespace MainProjectNumoPart.Models
         public DateTime CreatedAtUtc { get; set; }
         public DateTime? QueuedForBuildAtUtc { get; set; }
 
+        // Denied proposals accumulate over time (test entries, abandoned ideas); archiving hides
+        // them from Index's default listing without deleting the record. Only legal from Denied --
+        // see FeatureProposalService.ArchiveAsync.
+        public bool IsArchived { get; set; }
+
         public List<FeatureProposalRound> Rounds { get; set; } = new();
     }
 }

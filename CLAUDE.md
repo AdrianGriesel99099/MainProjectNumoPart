@@ -218,3 +218,16 @@ later round shows the reviewer confirmed the core idea. `ListApprovedUnqueuedAsy
 `/approved-unqueued` bot endpoint) hand the *latest round's* write-up to `docs/BACKLOG.md`, not the
 original one-line submission — the whole point of the back-and-forth is lost if the build step never
 sees its result.
+
+**`Pages/Features/Details.cshtml`'s route is `/Features/{id:int}`, deliberately overriding Razor
+Pages' file-path-derived default of `/Features/Details/{id}`** (confirmed broken in production
+2026-09-16: the first changelog entry ever to carry a `link` pointed at the file-path-default route
+and 404'd). Every consumer of a proposal link — the Changelog's stored `link` field, this doc, the
+deploy routine's prompt — was already written assuming `/Features/<id>`, so the route was changed
+to match rather than chasing down and rewriting every consumer (and every already-written
+`changelog.json` entry) the other way.
+
+Denied proposals can be archived (`FeatureProposal.IsArchived`, `ArchiveAsync` — only legal from
+`Denied`) to drop them off Index's default listing without deleting the row; an archived proposal
+stays reachable directly at `/Features/<id>`. The Archive button on Index only shows for a Denied
+row, gated by the same `User.CanUpload()` check as the add-idea form.

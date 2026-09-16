@@ -90,4 +90,21 @@
             }
         });
     });
+
+    const archiveButtons = document.querySelectorAll('[data-archive-id]');
+    archiveButtons.forEach((button) => {
+        button.addEventListener('click', async () => {
+            const id = button.dataset.archiveId;
+            button.disabled = true;
+
+            const response = await fetch(`/api/feature-proposals/${id}/archive`, { method: 'POST' });
+
+            if (response.ok) {
+                window.location.reload();
+            } else {
+                showError(await response.text() || 'Could not archive that idea.');
+                button.disabled = false;
+            }
+        });
+    });
 })();

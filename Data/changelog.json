@@ -5,6 +5,11 @@
     "description": "The /Vehicles browse page now shows each vehicle's current workflow stage in a dedicated column, matching the home page display so you can see at a glance where each vehicle stands in the process."
   },
   {
+    "date": "2026-09-16",
+    "title": "Feature added: comment-count badge on vehicle photo tiles",
+    "description": "A small comment-count badge now appears on photo tiles in the stage strips, letting you see at a glance which photos have notes without opening each one."
+  },
+  {
     "date": "2026-09-15",
     "title": "Feature added: Wheel alignment and Diagnostics photo stages",
     "description": "Two new photo stages have been added to the photo workflow — Wheel alignment and Diagnostics — so photos taken during those specific parts of a job now get their own dedicated grouping instead of being lumped into the Extra category.",
