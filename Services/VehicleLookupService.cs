@@ -128,7 +128,10 @@ namespace MainProjectNumoPart.Services
         //     retry would not fix.
         //   - SQL Server: Number 2627 (PRIMARY KEY/UNIQUE KEY constraint) or 2601 (duplicate key
         //     row in a unique index), depending on how the index was declared.
-        private static bool IsUniqueConstraintViolation(DbUpdateException ex) =>
+        // Internal rather than private: VehicleEditService's own check-then-save has the identical
+        // TOCTOU gap for the same reason (see its own comment), and provider-specific exception
+        // sniffing belongs in exactly one place.
+        internal static bool IsUniqueConstraintViolation(DbUpdateException ex) =>
             ex.InnerException is SqliteException { SqliteExtendedErrorCode: 2067 }
             || ex.InnerException is SqlException { Number: 2627 or 2601 };
 

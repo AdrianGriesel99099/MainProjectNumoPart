@@ -163,6 +163,56 @@ namespace MainProjectNumoPart.Tests
             Assert.Null(db.Vehicles.Single().MakeModel);
         }
 
+        // The pre-check (AnyAsync) and the save are two separate round trips, so a second edit
+        // committing the same VIN in between them is a real race -- the same class of TOCTOU gap
+        // VehicleLookupService.SaveWithRetryAsync already guards against for FindOrCreateAsync.
+        // Reproduced deterministically via the SavingChanges hook: it fires right after our own
+        // pre-check has already passed but before our SaveChangesAsync actually commits, which is
+        // exactly the window the race lives in.
+        [Fact]
+        public async Task ReturnsVinConflictWhenAConcurrentEditClaimsTheSameVinFirst()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var target = Seed(db, "MYVIN", "MYREG");
+            var other = Seed(db, "OTHERVIN", "OTHERREG");
+
+            db.SavingChanges += (_, _) =>
+            {
+                using var concurrent = TestDbContextFactory.CreateSecondaryContext(db);
+                var racer = concurrent.Vehicles.Single(v => v.Id == other.Id);
+                racer.Vin = "RACEDVIN";
+                concurrent.SaveChanges();
+            };
+
+            var result = await Build(db).UpdateAsync(target.Id, "RACEDVIN", "MYREG", null, "u1");
+
+            Assert.Equal(VehicleEditStatus.VinConflict, result.Status);
+            using var verify = TestDbContextFactory.CreateSecondaryContext(db);
+            Assert.Equal("MYVIN", verify.Vehicles.Single(v => v.Id == target.Id).Vin);
+        }
+
+        [Fact]
+        public async Task ReturnsRegConflictWhenAConcurrentEditClaimsTheSameRegFirst()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var target = Seed(db, "MYVIN", "MYREG");
+            var other = Seed(db, "OTHERVIN", "OTHERREG");
+
+            db.SavingChanges += (_, _) =>
+            {
+                using var concurrent = TestDbContextFactory.CreateSecondaryContext(db);
+                var racer = concurrent.Vehicles.Single(v => v.Id == other.Id);
+                racer.Reg = "RACEDREG";
+                concurrent.SaveChanges();
+            };
+
+            var result = await Build(db).UpdateAsync(target.Id, "MYVIN", "RACEDREG", null, "u1");
+
+            Assert.Equal(VehicleEditStatus.RegConflict, result.Status);
+            using var verify = TestDbContextFactory.CreateSecondaryContext(db);
+            Assert.Equal("MYREG", verify.Vehicles.Single(v => v.Id == target.Id).Reg);
+        }
+
         [Fact]
         public async Task ReturnsNotFoundForUnknownVehicle()
         {
