@@ -271,7 +271,18 @@
                     <span class="photo-seq">@photo.SequenceNumber.ToString("000")</span>
                     @if (photo.Part is not null)
                     {
-                        <span class="photo-part">@Html.DisplayFor(_ => photo.Part)</span>
+                        var taggedCommentCount = Model.PhotoCommentCounts.GetValueOrDefault(photo.Id);
+                        <span class="photo-part" title="@(taggedCommentCount > 0 ? $"{taggedCommentCount} comment(s)" : null)">
+                            @Html.DisplayFor(_ => photo.Part)
+                            @if (taggedCommentCount > 0)
+                            {
+                                <text> · 💬@taggedCommentCount</text>
+                            }
+                        </span>
+                    }
+                    else if (Model.PhotoCommentCounts.TryGetValue(photo.Id, out var untaggedCommentCount))
+                    {
+                        <span class="photo-part photo-comment-badge" title="@untaggedCommentCount comment(s)">💬 @untaggedCommentCount</span>
                     }
                     <a class="photo-view" asp-page="/Photos/View" asp-route-id="@photo.Id" title="View photo">⤢</a>
                     @if (User.IsAdmin())

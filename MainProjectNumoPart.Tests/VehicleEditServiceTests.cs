@@ -1,13 +1,10 @@
 using System;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using MainProjectNumoPart.Data;
 using MainProjectNumoPart.Models;
 using MainProjectNumoPart.Services;
-using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 
@@ -166,75 +163,54 @@ namespace MainProjectNumoPart.Tests
             Assert.Null(db.Vehicles.Single().MakeModel);
         }
 
-        // The VinConflict/RegConflict pre-checks are a separate round-trip from the SaveChangesAsync
-        // that actually commits, so two concurrent edits that both pass the pre-check (neither sees
-        // the other's not-yet-committed VIN) can still collide on the unique index. Reproduced
-        // deterministically, the same way VehicleLookupServiceTests reproduces its own save race:
-        // a SaveChangesInterceptor commits the "concurrent" edit at the exact moment between this
-        // attempt's pre-check and its own save, guaranteeing the interleaving instead of hoping a
-        // real thread schedules that way.
+        // The pre-check (AnyAsync) and the save are two separate round trips, so a second edit
+        // committing the same VIN in between them is a real race -- the same class of TOCTOU gap
+        // VehicleLookupService.SaveWithRetryAsync already guards against for FindOrCreateAsync.
+        // Reproduced deterministically via the SavingChanges hook: it fires right after our own
+        // pre-check has already passed but before our SaveChangesAsync actually commits, which is
+        // exactly the window the race lives in.
         [Fact]
-        public async Task RecoversWhenAConcurrentEditClaimsTheSameVinFirst()
+        public async Task ReturnsVinConflictWhenAConcurrentEditClaimsTheSameVinFirst()
         {
-            using var connection = new SqliteConnection("Data Source=:memory:");
-            connection.Open();
-
-            var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options;
-            using var db = new AppDbContext(options);
-            db.Database.EnsureCreated();
-
+            using var db = TestDbContextFactory.CreateInMemory();
             var target = Seed(db, "MYVIN", "MYREG");
             var other = Seed(db, "OTHERVIN", "OTHERREG");
 
-            var interceptor = new ClaimVinOnFirstSaveInterceptor(connection, other.Id, "STOLENVIN");
-            var raceOptions = new DbContextOptionsBuilder<AppDbContext>()
-                .UseSqlite(connection)
-                .AddInterceptors(interceptor)
-                .Options;
-            using var raceDb = new AppDbContext(raceOptions);
+            db.SavingChanges += (_, _) =>
+            {
+                using var concurrent = TestDbContextFactory.CreateSecondaryContext(db);
+                var racer = concurrent.Vehicles.Single(v => v.Id == other.Id);
+                racer.Vin = "RACEDVIN";
+                concurrent.SaveChanges();
+            };
 
-            var result = await new VehicleEditService(raceDb, NullLogger<VehicleEditService>.Instance)
-                .UpdateAsync(target.Id, "STOLENVIN", "MYREG", null, "u1");
+            var result = await Build(db).UpdateAsync(target.Id, "RACEDVIN", "MYREG", null, "u1");
 
             Assert.Equal(VehicleEditStatus.VinConflict, result.Status);
-            // Both records left alone: the loser keeps its original VIN, the winner keeps its
-            // claim. AsNoTracking because `db` still has its own stale, tracked copy of `other`
-            // from Seed() -- the winning commit happened through an entirely different context.
-            Assert.Equal("MYVIN", await db.Vehicles.AsNoTracking().Where(v => v.Id == target.Id).Select(v => v.Vin).SingleAsync());
-            Assert.Equal("STOLENVIN", await db.Vehicles.AsNoTracking().Where(v => v.Id == other.Id).Select(v => v.Vin).SingleAsync());
+            using var verify = TestDbContextFactory.CreateSecondaryContext(db);
+            Assert.Equal("MYVIN", verify.Vehicles.Single(v => v.Id == target.Id).Vin);
         }
 
-        // Fires exactly once, right before the intercepted context's own SaveChangesAsync sends its
-        // commands, standing in for a second request that wins the race to claim a VIN first.
-        private sealed class ClaimVinOnFirstSaveInterceptor : SaveChangesInterceptor
+        [Fact]
+        public async Task ReturnsRegConflictWhenAConcurrentEditClaimsTheSameRegFirst()
         {
-            private readonly SqliteConnection _connection;
-            private readonly int _otherVehicleId;
-            private readonly string _conflictingVin;
-            private bool _fired;
+            using var db = TestDbContextFactory.CreateInMemory();
+            var target = Seed(db, "MYVIN", "MYREG");
+            var other = Seed(db, "OTHERVIN", "OTHERREG");
 
-            public ClaimVinOnFirstSaveInterceptor(SqliteConnection connection, int otherVehicleId, string conflictingVin)
+            db.SavingChanges += (_, _) =>
             {
-                _connection = connection;
-                _otherVehicleId = otherVehicleId;
-                _conflictingVin = conflictingVin;
-            }
+                using var concurrent = TestDbContextFactory.CreateSecondaryContext(db);
+                var racer = concurrent.Vehicles.Single(v => v.Id == other.Id);
+                racer.Reg = "RACEDREG";
+                concurrent.SaveChanges();
+            };
 
-            public override async ValueTask<InterceptionResult<int>> SavingChangesAsync(
-                DbContextEventData eventData, InterceptionResult<int> result, CancellationToken cancellationToken = default)
-            {
-                if (!_fired)
-                {
-                    _fired = true;
-                    var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(_connection).Options;
-                    using var concurrent = new AppDbContext(options);
-                    var other = await concurrent.Vehicles.FirstAsync(v => v.Id == _otherVehicleId, cancellationToken);
-                    other.Vin = _conflictingVin;
-                    await concurrent.SaveChangesAsync(cancellationToken);
-                }
+            var result = await Build(db).UpdateAsync(target.Id, "MYVIN", "RACEDREG", null, "u1");
 
-                return await base.SavingChangesAsync(eventData, result, cancellationToken);
-            }
+            Assert.Equal(VehicleEditStatus.RegConflict, result.Status);
+            using var verify = TestDbContextFactory.CreateSecondaryContext(db);
+            Assert.Equal("MYREG", verify.Vehicles.Single(v => v.Id == target.Id).Reg);
         }
 
         [Fact]

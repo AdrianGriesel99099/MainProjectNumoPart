@@ -53,12 +53,16 @@
             <th>Idea</th>
             <th>Submitted by</th>
             <th>Status</th>
+            @if (User.CanUpload())
+            {
+                <th></th>
+            }
         </tr>
     </thead>
     <tbody>
     @if (Model.Proposals.Count == 0)
     {
-        <tr><td colspan="3" class="text-muted">No ideas yet.</td></tr>
+        <tr><td colspan="4" class="text-muted">No ideas yet.</td></tr>
     }
     @foreach (var proposal in Model.Proposals)
     {
@@ -66,6 +70,15 @@
             <td><a asp-page="Details" asp-route-id="@proposal.Id">@proposal.Title</a></td>
             <td class="text-muted">@proposal.SubmittedByEmail</td>
             <td><span class="badge @StatusDisplay.BadgeClass(proposal.Status)">@StatusDisplay.Label(proposal.Status)</span></td>
+            @if (User.CanUpload())
+            {
+                <td class="text-end">
+                    @if (proposal.Status == MainProjectNumoPart.Models.FeatureProposalStatus.Denied)
+                    {
+                        <button type="button" class="btn btn-sm btn-outline-secondary" data-archive-id="@proposal.Id">Archive</button>
+                    }
+                </td>
+            }
         </tr>
     }
     </tbody>

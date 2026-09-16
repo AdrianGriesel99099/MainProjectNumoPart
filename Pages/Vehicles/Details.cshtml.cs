@@ -30,6 +30,11 @@ namespace MainProjectNumoPart.Pages.Vehicles
 
         public int UntaggedCount { get; set; }
 
+        // Keyed by PhotoId, absent for photos with no comments — same convention as
+        // PhotoCountsByPart, so it lets the tile badge below spot "has notes" without opening
+        // each photo individually.
+        public Dictionary<int, int> PhotoCommentCounts { get; set; } = new();
+
         public List<VehicleUpdate> UpdatesNewestFirst { get; set; } = new();
 
         public List<DamageMark> DamageMarksNewestFirst { get; set; } = new();
@@ -54,6 +59,12 @@ namespace MainProjectNumoPart.Pages.Vehicles
                 .ToDictionary(g => g.Key, g => g.Count());
 
             UntaggedCount = vehicle.Photos.Count(p => !p.Part.HasValue);
+
+            var photoIds = vehicle.Photos.Select(p => p.Id).ToList();
+            PhotoCommentCounts = await _db.PhotoComments
+                .Where(c => photoIds.Contains(c.PhotoId))
+                .GroupBy(c => c.PhotoId)
+                .ToDictionaryAsync(g => g.Key, g => g.Count());
 
             UpdatesNewestFirst = vehicle.VehicleUpdates
                 .OrderByDescending(u => u.CreatedAtUtc)

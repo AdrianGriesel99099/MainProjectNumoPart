@@ -2,8 +2,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using MainProjectNumoPart.Data;
 using MainProjectNumoPart.Models;
-using Microsoft.Data.Sqlite;
-using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -60,6 +58,48 @@ namespace MainProjectNumoPart.Services
             // Checked before writing rather than relying on the unique index to throw, so the user
             // gets "that VIN belongs to another vehicle" instead of a DbUpdateException. Excludes
             // this vehicle so re-saving an unchanged form isn't a conflict with itself.
+            var conflict = await FindConflictAsync(vehicleId, normalizedVin, normalizedReg, ct);
+            if (conflict is not null) return conflict;
+
+            var previousVin = vehicle.Vin;
+            var previousReg = vehicle.Reg;
+
+            vehicle.Vin = normalizedVin;
+            vehicle.Reg = normalizedReg;
+            vehicle.MakeModel = string.IsNullOrWhiteSpace(makeModel) ? null : makeModel.Trim();
+
+            // BlobFolderName is deliberately NOT recomputed. Every existing photo's blob path was
+            // built from it, so changing it here would orphan every image this vehicle already has
+            // — the folder name is an immutable storage key, not a display value. It stops matching
+            // the VIN after a correction, which is expected and harmless.
+
+            try
+            {
+                await _db.SaveChangesAsync(ct);
+            }
+            catch (DbUpdateException ex) when (VehicleLookupService.IsUniqueConstraintViolation(ex))
+            {
+                // The AnyAsync check above and this save are two separate round trips, so another
+                // edit can claim the same VIN/Reg in between -- the same class of race
+                // VehicleLookupService.SaveWithRetryAsync already guards against for uploads.
+                // Unlike that path there's no sensible "resolve and merge" here (these are two
+                // distinct vehicles, not a duplicate create), so just report it as the same
+                // conflict the pre-check would have caught had it lost the race instead of won it.
+                return await FindConflictAsync(vehicleId, normalizedVin, normalizedReg, ct)
+                    ?? new VehicleEditResult(VehicleEditStatus.VinConflict,
+                        "That VIN or registration was just claimed by another vehicle. Please try again.");
+            }
+
+            _logger.LogInformation(
+                "Vehicle {VehicleId} edited by {EditorId}: Vin {OldVin}->{NewVin}, Reg {OldReg}->{NewReg}",
+                vehicle.Id, editorId, previousVin, normalizedVin, previousReg, normalizedReg);
+
+            return new VehicleEditResult(VehicleEditStatus.Updated);
+        }
+
+        private async Task<VehicleEditResult?> FindConflictAsync(
+            int vehicleId, string? normalizedVin, string? normalizedReg, CancellationToken ct)
+        {
             if (normalizedVin is not null)
             {
                 var clash = await _db.Vehicles
@@ -82,61 +122,7 @@ namespace MainProjectNumoPart.Services
                 }
             }
 
-            var previousVin = vehicle.Vin;
-            var previousReg = vehicle.Reg;
-
-            vehicle.Vin = normalizedVin;
-            vehicle.Reg = normalizedReg;
-            vehicle.MakeModel = string.IsNullOrWhiteSpace(makeModel) ? null : makeModel.Trim();
-
-            // BlobFolderName is deliberately NOT recomputed. Every existing photo's blob path was
-            // built from it, so changing it here would orphan every image this vehicle already has
-            // — the folder name is an immutable storage key, not a display value. It stops matching
-            // the VIN after a correction, which is expected and harmless.
-
-            try
-            {
-                await _db.SaveChangesAsync(ct);
-            }
-            catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex))
-            {
-                // The AnyAsync checks above are a separate round-trip from this save, so two
-                // concurrent edits that both pass the pre-check (neither sees the other's
-                // not-yet-committed VIN/Reg) can still collide here — the loser hits the unique
-                // index instead of getting the friendly conflict message. Recover the same way
-                // instead of letting a DbUpdateException reach the page as a 500.
-                _db.ChangeTracker.Clear();
-
-                if (normalizedVin is not null
-                    && await _db.Vehicles.AnyAsync(v => v.Vin == normalizedVin && v.Id != vehicleId, ct))
-                {
-                    return new VehicleEditResult(VehicleEditStatus.VinConflict,
-                        $"VIN '{normalizedVin}' already belongs to another vehicle.");
-                }
-
-                if (normalizedReg is not null
-                    && await _db.Vehicles.AnyAsync(v => v.Reg == normalizedReg && v.Id != vehicleId, ct))
-                {
-                    return new VehicleEditResult(VehicleEditStatus.RegConflict,
-                        $"Registration '{normalizedReg}' already belongs to another vehicle.");
-                }
-
-                throw;
-            }
-
-            _logger.LogInformation(
-                "Vehicle {VehicleId} edited by {EditorId}: Vin {OldVin}->{NewVin}, Reg {OldReg}->{NewReg}",
-                vehicle.Id, editorId, previousVin, normalizedVin, previousReg, normalizedReg);
-
-            return new VehicleEditResult(VehicleEditStatus.Updated);
+            return null;
         }
-
-        // Same detection VehicleLookupService.IsUniqueConstraintViolation and Upload.cshtml.cs's
-        // IsSequenceConflict already need: the provider-specific exception EF Core wraps in
-        // DbUpdateException differs between SQLite (dev/test) and SQL Server (production), and
-        // both need recognising here or this catch would silently only work in dev.
-        private static bool IsUniqueConstraintViolation(DbUpdateException ex) =>
-            ex.InnerException is SqliteException { SqliteExtendedErrorCode: 2067 }
-            || ex.InnerException is SqlException { Number: 2627 or 2601 };
     }
 }
