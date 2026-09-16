@@ -31,7 +31,9 @@
                 body: JSON.stringify({ title, description })
             });
 
-            if (response.ok) {
+            // Exact status, not response.ok — a role-denied request answers 302 to
+            // /Account/AccessDenied, which fetch follows to a 200 and would look like success.
+            if (response.status === 200) {
                 window.location.reload();
             } else {
                 showError(await response.text() || 'Could not submit that idea.');
@@ -80,7 +82,9 @@
                 body: JSON.stringify({ decision, comment, answers })
             });
 
-            if (response.ok) {
+            // Exact status, not response.ok — a role-denied request answers 302 to
+            // /Account/AccessDenied, which fetch follows to a 200 and would look like success.
+            if (response.status === 200) {
                 window.location.reload();
             } else {
                 showError(await response.text() || 'Could not save that decision.');
@@ -99,7 +103,9 @@
 
             const response = await fetch(`/api/feature-proposals/${id}/archive`, { method: 'POST' });
 
-            if (response.ok) {
+            // Exact status, not response.ok — a role-denied request answers 302 to
+            // /Account/AccessDenied, which fetch follows to a 200 and would look like success.
+            if (response.status === 200) {
                 window.location.reload();
             } else {
                 showError(await response.text() || 'Could not archive that idea.');
