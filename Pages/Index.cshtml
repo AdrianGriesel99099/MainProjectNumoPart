@@ -71,6 +71,10 @@
 <table class="table">
     <thead><tr><th>VIN</th><th>Reg</th><th>Make/Model</th><th>Added</th><th>Stage</th><th>Tagging</th></tr></thead>
     <tbody>
+    @if (Model.RecentVehicles.Count == 0)
+    {
+        <tr><td colspan="6" class="text-muted">No vehicles yet.</td></tr>
+    }
     @foreach (var vehicle in Model.RecentVehicles)
     {
         <tr>
