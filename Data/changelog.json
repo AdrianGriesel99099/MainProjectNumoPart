@@ -1,6 +1,11 @@
 [
   {
     "date": "2026-09-16",
+    "title": "Feature added: Stage column on the All vehicles page",
+    "description": "The /Vehicles browse page now shows each vehicle's current workflow stage in a dedicated column, matching the home page display so you can see at a glance where each vehicle stands in the process."
+  },
+  {
+    "date": "2026-09-16",
     "title": "Feature added: comment-count badge on vehicle photo tiles",
     "description": "A small comment-count badge now appears on photo tiles in the stage strips, letting you see at a glance which photos have notes without opening each one."
   },
