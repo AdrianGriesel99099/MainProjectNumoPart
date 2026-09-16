@@ -69,6 +69,21 @@ namespace MainProjectNumoPart.Endpoints
                 };
             });
 
+            group.MapPost("/{id:int}/archive", async (
+                int id,
+                FeatureProposalService proposals,
+                CancellationToken ct) =>
+            {
+                var result = await proposals.ArchiveAsync(id, ct);
+
+                return result.Status switch
+                {
+                    FeatureProposalDecisionStatus.Success => Results.Ok(),
+                    FeatureProposalDecisionStatus.NotFound => Results.NotFound(),
+                    _ => Results.BadRequest(result.Message)
+                };
+            });
+
             MapBotEndpoints(app);
         }
 

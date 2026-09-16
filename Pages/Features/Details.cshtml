@@ -1,5 +1,8 @@
 @* Pages/Features/Details.cshtml *@
-@page "{id:int}"
+@* Absolute route (not the file-path-relative default, which would be /Features/Details/{id}) --
+   Changelog entries, CLAUDE.md, and the deploy routine's prompt all write links as
+   /Features/<id>, so the route has to match that rather than the other way around. *@
+@page "/Features/{id:int}"
 @model MainProjectNumoPart.Pages.Features.DetailsModel
 @using MainProjectNumoPart.Models
 @using MainProjectNumoPart.Pages.Features
