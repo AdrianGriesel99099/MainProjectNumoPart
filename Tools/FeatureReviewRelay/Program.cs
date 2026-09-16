@@ -79,15 +79,40 @@ static async Task PrepareAsync(HttpClient site, string repoRoot, string pendingD
 
     if (approved.Count == 0) return;
 
+    // One proposal at a time, not a single batch write followed by a separate loop of POSTs.
+    // The batch form wrote every line to BACKLOG.md up front, then called mark-queued for each
+    // proposal in turn with no try/catch -- EnsureSuccessStatusCode threw unhandled on the first
+    // failure (a transient network blip, a brief site outage), aborting the loop and leaving
+    // BACKLOG.md holding lines for proposals whose mark-queued call never even ran. Those
+    // proposals are still "approved-unqueued" on the site, so tomorrow's prepare run re-fetches
+    // and re-appends every one of them, duplicating that whole batch in BACKLOG.md.
+    //
+    // Writing the backlog line before the mark-queued call (rather than after) is deliberate too:
+    // once mark-queued succeeds the site no longer reports this proposal as approved-unqueued, so
+    // a failure to append AFTER that call would silently lose the build request forever with
+    // nothing left to retry. Doing it in this order means a failed mark-queued call can duplicate
+    // at most this one proposal's line on a later retry -- a harmless, self-correcting rerun,
+    // consistent with this whole pipeline's "nothing assumes yesterday's run succeeded" design --
+    // rather than risking a human-approved feature vanishing with no record of it anywhere.
     var backlogPath = Path.Combine(repoRoot, "docs", "BACKLOG.md");
-    var lines = approved.Select(p => $"Build: {p.Title} (proposal #{p.Id}): {SingleLine(p.Description)}");
-    await File.AppendAllLinesAsync(backlogPath, lines);
 
     foreach (var proposal in approved)
     {
-        var response = await site.PostAsync($"api/bot/feature-proposals/{proposal.Id}/mark-queued", content: null);
-        response.EnsureSuccessStatusCode();
-        Console.WriteLine($"Proposal {proposal.Id} \"{proposal.Title}\": queued in docs/BACKLOG.md.");
+        await File.AppendAllLinesAsync(backlogPath,
+            new[] { $"Build: {proposal.Title} (proposal #{proposal.Id}): {SingleLine(proposal.Description)}" });
+
+        try
+        {
+            var response = await site.PostAsync($"api/bot/feature-proposals/{proposal.Id}/mark-queued", content: null);
+            response.EnsureSuccessStatusCode();
+            Console.WriteLine($"Proposal {proposal.Id} \"{proposal.Title}\": queued in docs/BACKLOG.md.");
+        }
+        catch (Exception ex)
+        {
+            // Still queued in docs/BACKLOG.md (harmless if it gets built before this retries) --
+            // the mark-queued call itself is retried on tomorrow's cycle.
+            Console.WriteLine($"Proposal {proposal.Id} \"{proposal.Title}\": mark-queued failed, will retry tomorrow. {ex.Message}");
+        }
     }
 }
 
