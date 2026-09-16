@@ -83,5 +83,22 @@ namespace MainProjectNumoPart.Tests
             Assert.Equal(400, decoded.Width);
             Assert.Equal(400, decoded.Height);
         }
+
+        [Fact]
+        public async Task CreateThumbnailAsync_CorruptData_ThrowsImageFormatException()
+        {
+            // Pins the exception TYPE Pages/Upload.cshtml.cs's OnPostAsync now specifically
+            // catches to turn a corrupted/truncated upload into a friendly per-file validation
+            // error instead of an unhandled 500 -- UnknownImageFormatException (thrown here) and
+            // InvalidImageContentException both derive from this common base, and if a future
+            // ImageSharp version stopped doing that, Upload's catch would silently stop working
+            // and this test would be the one to catch it.
+            using var source = new MemoryStream(new byte[] { 0xFF, 0xD8, 0xFF, 0xE0 });
+
+            // ThrowsAnyAsync, not ThrowsAsync: ImageSharp throws the derived
+            // UnknownImageFormatException, not ImageFormatException itself -- it's the common
+            // base type that matters here, since that's what Upload.cshtml.cs's catch declares.
+            await Assert.ThrowsAnyAsync<ImageFormatException>(() => ThumbnailGenerator.CreateThumbnailAsync(source));
+        }
     }
 }
