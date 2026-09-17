@@ -1,0 +1,14 @@
+{
+  "revisedDescription": "Staff can start uploading a photo or file for a vehicle before its details are known, so the photos aren't held up waiting on paperwork. The upload comes in unassigned, and staff go back later to attach the vehicle, stage, part, and anything else once that information is available. Nothing about how a finished, fully-filled-in upload looks or works changes -- this only lets the photo arrive first and the details catch up after.",
+  "readyForFinalApproval": false,
+  "questions": [
+    {
+      "prompt": "How should staff find these unassigned uploads afterward, so none get forgotten before the vehicle details are filled in?",
+      "options": [
+        "A separate list/section showing only uploads still missing vehicle details",
+        "A flag or badge on them within the existing photo list",
+        "Something else (see my comment)"
+      ]
+    }
+  ]
+}

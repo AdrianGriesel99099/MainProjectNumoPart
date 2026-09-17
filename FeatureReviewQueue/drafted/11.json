@@ -1,0 +1,4 @@
+{
+  "revisedDescription": "Staff will be able to enter a vehicle's make and model right on the homescreen, alongside registration and VIN, instead of having to save the vehicle first and then open Edit just to add it. This saves an extra step during intake for information that's needed on almost every vehicle anyway. Nothing about how make and model are stored or shown elsewhere changes.",
+  "readyForFinalApproval": true
+}
