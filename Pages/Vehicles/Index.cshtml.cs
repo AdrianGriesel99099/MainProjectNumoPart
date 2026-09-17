@@ -44,6 +44,9 @@ namespace MainProjectNumoPart.Pages.Vehicles
         // Vehicles absent from this dictionary have no photos yet — see VehicleCurrentStage.
         public Dictionary<int, Stage> CurrentStage { get; set; } = new();
 
+        // Every listed vehicle has an entry — see VehicleLastActivity.
+        public Dictionary<int, DateTime> LastActivity { get; set; } = new();
+
         public async Task OnGetAsync()
         {
             if (PageNumber < 1) PageNumber = 1;
@@ -72,6 +75,8 @@ namespace MainProjectNumoPart.Pages.Vehicles
             UntaggedCounts = await Services.UntaggedPhotoCounts.ForVehiclesAsync(
                 _db, Vehicles.Select(v => v.Id));
             CurrentStage = await Services.VehicleCurrentStage.ForVehiclesAsync(
+                _db, Vehicles.Select(v => v.Id));
+            LastActivity = await Services.VehicleLastActivity.ForVehiclesAsync(
                 _db, Vehicles.Select(v => v.Id));
         }
     }
