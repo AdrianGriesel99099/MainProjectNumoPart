@@ -65,6 +65,13 @@ namespace MainProjectNumoPart.Pages.Vehicles
 
             TotalCount = await query.CountAsync();
 
+            // Mirrors the < 1 clamp above: a page number beyond the last page (a stale bookmark,
+            // a narrowed search, or a hand-edited URL) must not overshoot Skip/Take and land on an
+            // empty page while TotalCount above it still reports real matches. TotalPages is 0 when
+            // there are no results at all, so this only fires once there's an actual last page to
+            // clamp to.
+            if (TotalPages > 0 && PageNumber > TotalPages) PageNumber = TotalPages;
+
             Vehicles = await query
                 .OrderByDescending(v => v.CreatedAtUtc)
                 .ThenByDescending(v => v.Id)
