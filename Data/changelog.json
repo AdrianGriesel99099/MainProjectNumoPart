@@ -1,5 +1,10 @@
 [
   {
+    "date": "2026-09-20",
+    "title": "Feature added: edit job-card updates and photo comments in place",
+    "description": "Staff can now edit their own job-card updates and photo comments to fix typos or add details, keeping the original timestamp and author attribution while only the text changes."
+  },
+  {
     "date": "2026-09-16",
     "title": "Feature added: Stage column on the All vehicles page",
     "description": "The /Vehicles browse page now shows each vehicle's current workflow stage in a dedicated column, matching the home page display so you can see at a glance where each vehicle stands in the process."
