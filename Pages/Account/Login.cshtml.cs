@@ -46,7 +46,7 @@ namespace MainProjectNumoPart.Pages.Account
 
             if (result.Succeeded)
             {
-                return LocalRedirect(returnUrl ?? "/");
+                return LocalRedirect(Url.IsLocalUrl(returnUrl) ? returnUrl! : "/");
             }
 
             ErrorMessage = result.IsLockedOut
