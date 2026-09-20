@@ -44,6 +44,9 @@ namespace MainProjectNumoPart.Pages.Vehicles
         // Vehicles absent from this dictionary have no photos yet — see VehicleCurrentStage.
         public Dictionary<int, Stage> CurrentStage { get; set; } = new();
 
+        // Every listed vehicle has an entry — see VehicleLastActivity.
+        public Dictionary<int, DateTime> LastActivity { get; set; } = new();
+
         public async Task OnGetAsync()
         {
             if (PageNumber < 1) PageNumber = 1;
@@ -62,6 +65,13 @@ namespace MainProjectNumoPart.Pages.Vehicles
 
             TotalCount = await query.CountAsync();
 
+            // Mirrors the < 1 clamp above: a page number beyond the last page (a stale bookmark,
+            // a narrowed search, or a hand-edited URL) must not overshoot Skip/Take and land on an
+            // empty page while TotalCount above it still reports real matches. TotalPages is 0 when
+            // there are no results at all, so this only fires once there's an actual last page to
+            // clamp to.
+            if (TotalPages > 0 && PageNumber > TotalPages) PageNumber = TotalPages;
+
             Vehicles = await query
                 .OrderByDescending(v => v.CreatedAtUtc)
                 .ThenByDescending(v => v.Id)
@@ -72,6 +82,8 @@ namespace MainProjectNumoPart.Pages.Vehicles
             UntaggedCounts = await Services.UntaggedPhotoCounts.ForVehiclesAsync(
                 _db, Vehicles.Select(v => v.Id));
             CurrentStage = await Services.VehicleCurrentStage.ForVehiclesAsync(
+                _db, Vehicles.Select(v => v.Id));
+            LastActivity = await Services.VehicleLastActivity.ForVehiclesAsync(
                 _db, Vehicles.Select(v => v.Id));
         }
     }

@@ -94,6 +94,53 @@ namespace MainProjectNumoPart.Tests
         }
 
         [Fact]
+        public async Task OnGetAsync_WithPageBeyondLastPage_ClampsToLastPage()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            for (var i = 1; i <= 30; i++)
+            {
+                SeedVehicle(db, $"VIN{i}", DateTime.UtcNow.AddMinutes(-(30 - i)));
+            }
+
+            var model = new IndexModel(db) { PageNumber = 999 };
+            await model.OnGetAsync();
+
+            Assert.Equal(2, model.TotalPages);
+            Assert.Equal(2, model.PageNumber);
+            Assert.Equal(30 - IndexModel.PageSize, model.Vehicles.Count);
+            Assert.NotEmpty(model.Vehicles);
+        }
+
+        [Fact]
+        public async Task OnGetAsync_WithPageBeyondLastPage_AfterSearchNarrows_ClampsToLastPage()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            SeedVehicle(db, "MATCH1", DateTime.UtcNow);
+            SeedVehicle(db, "UNRELATED", DateTime.UtcNow.AddMinutes(-1));
+
+            // Page 2 would have been valid before narrowing the search to one match.
+            var model = new IndexModel(db) { Search = "MATCH", PageNumber = 2 };
+            await model.OnGetAsync();
+
+            Assert.Equal(1, model.TotalPages);
+            Assert.Equal(1, model.PageNumber);
+            Assert.Single(model.Vehicles);
+        }
+
+        [Fact]
+        public async Task OnGetAsync_WithNoResultsAtAll_LeavesPageNumberUnclamped()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+
+            var model = new IndexModel(db) { PageNumber = 5 };
+            await model.OnGetAsync();
+
+            Assert.Equal(0, model.TotalPages);
+            Assert.Equal(5, model.PageNumber);
+            Assert.Empty(model.Vehicles);
+        }
+
+        [Fact]
         public async Task OnGetAsync_WithNoSearch_ReturnsAllVehicles()
         {
             using var db = TestDbContextFactory.CreateInMemory();
