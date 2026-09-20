@@ -14,6 +14,8 @@ namespace MainProjectNumoPart.Endpoints
 
         public record AddUpdateRequest(string? Body);
 
+        public record EditUpdateRequest(string? Body);
+
         // PhotoId is nullable — null means the part had no tagged photo when the mark was made,
         // so it's anchored at a fixed position rather than a specific photo.
         public record AddDamageMarkRequest(Part Part, int? PhotoId, double XPercent, double YPercent, string? Note);
@@ -93,6 +95,29 @@ namespace MainProjectNumoPart.Endpoints
             })
             // Two arguments, never the comma-joined Roles.StaffOrAdmin constant — see the
             // tagging endpoint in PhotoEndpoints.cs for why that silently denies everyone.
+            .RequireAuthorization(policy => policy.RequireRole(Roles.Staff, Roles.Admin));
+
+            group.MapPut("/updates/{updateId:int}", async (
+                int updateId,
+                EditUpdateRequest? body,
+                VehicleUpdateService updates,
+                UserManager<IdentityUser> userManager,
+                HttpContext http,
+                CancellationToken ct) =>
+            {
+                var userId = userManager.GetUserId(http.User)!;
+                var result = await updates.EditAsync(updateId, body?.Body, userId, http.User.IsAdmin(), ct);
+
+                return result.Status switch
+                {
+                    NoteStatus.Success => Results.Ok(),
+                    NoteStatus.Forbidden => Results.StatusCode(StatusCodes.Status403Forbidden),
+                    NoteStatus.NotFound => Results.NotFound(),
+                    _ => Results.BadRequest(result.Message)
+                };
+            })
+            // Staff, not just Admin, can reach this now — EditAsync itself enforces that only
+            // the update's own author or an Admin can actually change it.
             .RequireAuthorization(policy => policy.RequireRole(Roles.Staff, Roles.Admin));
 
             group.MapDelete("/updates/{updateId:int}", async (
