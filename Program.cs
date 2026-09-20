@@ -41,6 +41,7 @@ builder.Services.AddScoped<VehicleUpdateService>();
 builder.Services.AddScoped<PhotoCommentService>();
 builder.Services.AddScoped<DamageMarkService>();
 builder.Services.AddScoped<FeatureProposalService>();
+builder.Services.AddScoped<PhotoExportService>();
 
 // Minimal-API JSON defaults to reading enums as NUMBERS, so a body of {"part":"FrontBumper"}
 // is rejected with a 400 while {"part":null} succeeds — a split failure that is easy to miss.

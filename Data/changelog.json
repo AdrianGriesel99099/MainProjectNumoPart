@@ -1,6 +1,12 @@
 [
   {
     "date": "2026-09-20",
+    "title": "Feature added: photo export as PDF or zip with metadata and damage pins",
+    "description": "Export selected photos as a PDF or zip file. Each export includes the photo's stage, part, date, and comment thread. Optionally burn damage-mark pins directly into each image before export.",
+    "link": "/Features/8"
+  },
+  {
+    "date": "2026-09-20",
     "title": "Feature added: edit job-card updates and photo comments in place",
     "description": "Staff can now edit their own job-card updates and photo comments to fix typos or add details, keeping the original timestamp and author attribution while only the text changes."
   },
