@@ -1,5 +1,10 @@
 [
   {
+    "date": "2026-09-20",
+    "title": "Feature added: Last activity and stale-job badge on the All Vehicles page",
+    "description": "The /Vehicles browse page now shows when each vehicle was last updated (with a Stale badge if idle more than 7 days), so you can see at a glance which jobs are moving and which need attention."
+  },
+  {
     "date": "2026-09-16",
     "title": "Feature added: Stage column on the All vehicles page",
     "description": "The /Vehicles browse page now shows each vehicle's current workflow stage in a dedicated column, matching the home page display so you can see at a glance where each vehicle stands in the process."
