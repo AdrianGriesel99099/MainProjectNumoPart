@@ -40,9 +40,16 @@
                         <span class="fw-semibold">@update.AuthorEmail</span>
                         <span class="text-muted small">@update.CreatedAtUtc.ToString("d MMM yyyy, HH:mm")</span>
                     </div>
-                    <p class="mb-1" style="white-space: pre-wrap;">@update.Body</p>
-                    @if (User.IsAdmin())
+                    <p class="mb-1 job-update-body" style="white-space: pre-wrap;">@update.Body</p>
+                    @if (User.CanDeleteNote(update.AuthorId))
                     {
+                        <div class="job-update-edit-form d-none mb-1">
+                            <textarea class="form-control job-update-edit-textarea" rows="2" maxlength="2000">@update.Body</textarea>
+                            <button type="button" class="btn btn-sm btn-primary mt-1 job-update-edit-save" data-update-id="@update.Id">Save</button>
+                            <button type="button" class="btn btn-sm btn-link mt-1 job-update-edit-cancel">Cancel</button>
+                            <div class="text-danger small mt-1 job-update-edit-error"></div>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-secondary job-update-edit" data-update-id="@update.Id">Edit</button>
                         <button type="button" class="btn btn-sm btn-outline-danger job-update-delete" data-update-id="@update.Id">Delete</button>
                     }
                 </li>
@@ -83,7 +90,7 @@
     </script>
 }
 
-@if (User.IsAdmin())
+@if (User.CanUpload())
 {
     <script>
         document.querySelectorAll('.job-update-delete').forEach(btn => {
@@ -95,6 +102,52 @@
                     document.querySelector(`.job-card-entry[data-update-id="${id}"]`).remove();
                 } else {
                     alert('Delete failed.');
+                }
+            });
+        });
+    </script>
+}
+
+@if (User.CanUpload())
+{
+    <script>
+        document.querySelectorAll('.job-update-edit').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const entry = btn.closest('.job-card-entry');
+                entry.querySelector('.job-update-body').classList.add('d-none');
+                entry.querySelector('.job-update-edit-form').classList.remove('d-none');
+                btn.classList.add('d-none');
+                entry.querySelector('.job-update-delete').classList.add('d-none');
+            });
+        });
+
+        document.querySelectorAll('.job-update-edit-cancel').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const entry = btn.closest('.job-card-entry');
+                entry.querySelector('.job-update-edit-textarea').value = entry.querySelector('.job-update-body').textContent;
+                entry.querySelector('.job-update-edit-error').textContent = '';
+                entry.querySelector('.job-update-edit-form').classList.add('d-none');
+                entry.querySelector('.job-update-body').classList.remove('d-none');
+                entry.querySelector('.job-update-edit').classList.remove('d-none');
+                entry.querySelector('.job-update-delete').classList.remove('d-none');
+            });
+        });
+
+        document.querySelectorAll('.job-update-edit-save').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const entry = btn.closest('.job-card-entry');
+                const id = btn.dataset.updateId;
+                const body = entry.querySelector('.job-update-edit-textarea').value;
+                const response = await fetch(`/api/vehicles/updates/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ body })
+                });
+                if (response.status === 200) {
+                    window.location.reload();
+                } else {
+                    entry.querySelector('.job-update-edit-error').textContent =
+                        (await response.text()) || 'Could not save the update.';
                 }
             });
         });
@@ -155,7 +208,7 @@
                         </div>
                         <p class="mb-1 small" style="white-space: pre-wrap;">@mark.Note</p>
                         <span class="text-muted small">@mark.AuthorEmail</span>
-                        @if (User.IsAdmin())
+                        @if (User.CanDeleteNote(mark.AuthorId))
                         {
                             <button type="button" class="btn btn-sm btn-outline-danger damage-mark-delete ms-2" data-mark-id="@mark.Id">Delete</button>
                         }
@@ -211,7 +264,8 @@
         // popup for a different part is instant client-side filtering, not another round-trip.
         window.__damageMarksData = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.DamageMarksNewestFirst.Select(m => new {
             id = m.Id, part = m.Part.ToString(), photoId = m.PhotoId,
-            xPercent = m.XPercent, yPercent = m.YPercent, note = m.Note, authorEmail = m.AuthorEmail
+            xPercent = m.XPercent, yPercent = m.YPercent, note = m.Note, authorEmail = m.AuthorEmail,
+            authorId = m.AuthorId
         })));
         window.__vehiclePhotosData = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Vehicle.Photos
             .Where(p => p.Part.HasValue)
@@ -219,6 +273,7 @@
             .Select(p => new { id = p.Id, part = p.Part!.Value.ToString(), label = p.Stage + " #" + p.SequenceNumber.ToString("000") })));
         window.__vehicleId = @Model.Vehicle.Id;
         window.__isAdmin = @Json.Serialize(User.IsAdmin());
+        window.__currentUserId = @Json.Serialize(User.CurrentUserId());
         window.__canMarkDamage = @Json.Serialize(User.CanUpload());
     </script>
     <script src="~/js/damagemarks.js"></script>
@@ -269,7 +324,18 @@
                     <span class="photo-seq">@photo.SequenceNumber.ToString("000")</span>
                     @if (photo.Part is not null)
                     {
-                        <span class="photo-part">@Html.DisplayFor(_ => photo.Part)</span>
+                        var taggedCommentCount = Model.PhotoCommentCounts.GetValueOrDefault(photo.Id);
+                        <span class="photo-part" title="@(taggedCommentCount > 0 ? $"{taggedCommentCount} comment(s)" : null)">
+                            @Html.DisplayFor(_ => photo.Part)
+                            @if (taggedCommentCount > 0)
+                            {
+                                <text> · 💬@taggedCommentCount</text>
+                            }
+                        </span>
+                    }
+                    else if (Model.PhotoCommentCounts.TryGetValue(photo.Id, out var untaggedCommentCount))
+                    {
+                        <span class="photo-part photo-comment-badge" title="@untaggedCommentCount comment(s)">💬 @untaggedCommentCount</span>
                     }
                     <a class="photo-view" asp-page="/Photos/View" asp-route-id="@photo.Id" title="View photo">⤢</a>
                     @if (User.IsAdmin())

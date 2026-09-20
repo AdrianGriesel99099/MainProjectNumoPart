@@ -57,7 +57,7 @@
             dot.style.left = m.xPercent + '%';
             dot.style.top = m.yPercent + '%';
             dot.title = m.note + ' — ' + m.authorEmail;
-            if (window.__isAdmin) {
+            if (window.__isAdmin || m.authorId === window.__currentUserId) {
                 dot.addEventListener('click', (e) => { e.stopPropagation(); deleteMark(m.id); });
             }
             target.appendChild(dot);

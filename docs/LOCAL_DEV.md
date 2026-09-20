@@ -197,7 +197,9 @@ shooting a burst of photos and sorting them afterwards.
 ### Job card and photo comments
 
 Two independent free-text logs: a job card per vehicle (`VehicleUpdate`), and comments per photo
-(`PhotoComment`). Both are Staff/Admin to write, everyone to read, Admin-only to delete.
+(`PhotoComment`). Both are Staff/Admin to write, everyone to read. Deleting one is allowed for its
+own author (Staff or Admin) or for any Admin — a Staff member can undo their own mistake without
+waiting on an Admin, but still can't touch someone else's entry.
 
 - [ ] Post a job-card update as Staff — appears immediately with your email and timestamp; as
       Viewer, the add-update form simply isn't shown, and posting directly via
@@ -205,17 +207,23 @@ Two independent free-text logs: a job card per vehicle (`VehicleUpdate`), and co
       just that Viewer is refused — `RequireRole(Roles.Staff, Roles.Admin)` must stay two
       arguments; the comma-joined `Roles.StaffOrAdmin` constant would silently deny Staff too, and
       a denial-only check wouldn't catch that.
-- [ ] Delete a job-card entry as Admin → gone; as Staff → refused.
+- [ ] Post a job-card update as Staff, then delete it as that same Staff account → gone, no Delete
+      button or endpoint access needed from an Admin.
+- [ ] As a *different* Staff account, that entry's Delete button isn't shown, and
+      `DELETE /api/vehicles/updates/{id}` on it directly → refused (403).
+- [ ] Delete anyone's job-card entry as Admin → gone.
 - [ ] Open a photo via the small view icon (⤢) on a vehicle page's photo tile — the rest of the
       tile still toggles multi-select exactly as before; the icon itself does not.
 - [ ] On `/Photos`, click a tile — lands on that photo's page (`/Photos/View/{id}`), not the
       vehicle page.
 - [ ] On a photo's page, both dates are shown — "Uploaded" always has a value; "Taken" shows
       "Not recorded" for a photo with no EXIF/manual date rather than a blank or an error.
-- [ ] Post and delete a photo comment, same role rules as the job card above.
+- [ ] Post and delete a photo comment, same author-or-admin rules as the job card above.
 - [ ] Delete the user who wrote a comment or update, then reload the page it's on — the entry
-      still shows their original email. This is `AuthorEmail`, captured once at write time
-      specifically so a later account deletion can't make old comments unattributed.
+      still shows their original email, and its Delete button is gone for everyone but an Admin
+      (its `AuthorId` no longer matches any signed-in account). This is `AuthorEmail`, captured
+      once at write time specifically so a later account deletion can't make old comments
+      unattributed.
 
 ### Upload feedback
 
@@ -267,7 +275,9 @@ trigger.
 - [ ] As Staff, add a mark → succeeds; as Viewer, `POST /api/vehicles/{id}/damage-marks` → refused.
       **Confirm Staff specifically succeeds**, not just that Viewer is refused — same
       `RequireRole(Roles.Staff, Roles.Admin)` two-argument trap as the job card and photo comments.
-- [ ] Delete a mark as Admin → gone; as Staff → refused (delete is Admin-only, unlike add).
+- [ ] Delete a mark as Admin → gone. As the Staff account who made it → also gone, both from the
+      "Damage marks" list and by clicking its pin in the popup. As a *different* Staff account →
+      refused (403), and neither its list entry nor its pin is clickable for delete.
 - [ ] Pick a button-only part (one that never had a diagram/3D hotspot even before, e.g. Interior)
       with nothing tagged — popup still opens, shows the same text-only fallback, and saving still
       works (fixed centre position rather than a real pin, since there's nothing to click on). This

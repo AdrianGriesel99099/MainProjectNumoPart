@@ -363,5 +363,66 @@ namespace MainProjectNumoPart.Tests
 
             Assert.Equal(FeatureProposalDecisionStatus.NotFound, result.Status);
         }
+
+        [Fact]
+        public async Task ArchiveAsync_ArchivesADeniedProposal()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var submit = await Build(db).SubmitAsync("Title", "Description", "submitter", "submitter@w.local");
+            var proposal = db.FeatureProposals.Single();
+            proposal.Status = FeatureProposalStatus.Denied;
+            db.SaveChanges();
+
+            var result = await Build(db).ArchiveAsync(proposal.Id);
+
+            Assert.Equal(FeatureProposalDecisionStatus.Success, result.Status);
+            Assert.True(db.FeatureProposals.Single().IsArchived);
+        }
+
+        [Theory]
+        [InlineData(FeatureProposalStatus.NeedsReview)]
+        [InlineData(FeatureProposalStatus.AwaitingAiRevision)]
+        [InlineData(FeatureProposalStatus.ReadyForFinalApproval)]
+        [InlineData(FeatureProposalStatus.Approved)]
+        public async Task ArchiveAsync_RejectsAnythingOtherThanDenied(FeatureProposalStatus status)
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var submit = await Build(db).SubmitAsync("Title", "Description", "submitter", "submitter@w.local");
+            var proposal = db.FeatureProposals.Single();
+            proposal.Status = status;
+            db.SaveChanges();
+
+            var result = await Build(db).ArchiveAsync(proposal.Id);
+
+            Assert.Equal(FeatureProposalDecisionStatus.InvalidState, result.Status);
+            Assert.False(db.FeatureProposals.Single().IsArchived);
+        }
+
+        [Fact]
+        public async Task ArchiveAsync_ReturnsNotFoundForUnknownProposal()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+
+            var result = await Build(db).ArchiveAsync(999);
+
+            Assert.Equal(FeatureProposalDecisionStatus.NotFound, result.Status);
+        }
+
+        [Fact]
+        public async Task ListAsync_ExcludesArchivedProposals()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var visible = await Build(db).SubmitAsync("Visible", "Description", "submitter", "submitter@w.local");
+            var denied = await Build(db).SubmitAsync("Denied and archived", "Description", "submitter", "submitter@w.local");
+            var archivedProposal = db.FeatureProposals.Single(p => p.Id == denied.ProposalId);
+            archivedProposal.Status = FeatureProposalStatus.Denied;
+            db.SaveChanges();
+            await Build(db).ArchiveAsync(archivedProposal.Id);
+
+            var list = await Build(db).ListAsync();
+
+            var listedProposal = Assert.Single(list);
+            Assert.Equal(visible.ProposalId, listedProposal.Id);
+        }
     }
 }

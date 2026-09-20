@@ -32,6 +32,16 @@
     <a asp-page="/Photos/Index" class="btn btn-sm btn-outline-secondary">Clear</a>
 </form>
 
+@if (Model.DateRangeWarnings.Count > 0)
+{
+    <div class="alert alert-warning small">
+        @foreach (var warning in Model.DateRangeWarnings)
+        {
+            <div>@warning</div>
+        }
+    </div>
+}
+
 @if (Model.IsTruncated)
 {
     <p class="text-muted small">
@@ -39,17 +49,24 @@
     </p>
 }
 
-<div class="photo-grid">
-    @foreach (var photo in Model.Photos)
-    {
-        <a class="photo-tile" asp-page="/Photos/View" asp-route-id="@photo.Id">
-            <img src="/api/photos/@photo.Id/thumbnail" loading="lazy"
-                 alt="@photo.Stage photo for @(photo.Vehicle.Reg ?? photo.Vehicle.Vin)" />
-            <span class="photo-seq">@photo.Stage</span>
-            @if (photo.Part is not null)
-            {
-                <span class="photo-part">@Html.DisplayFor(_ => photo.Part)</span>
-            }
-        </a>
-    }
-</div>
+@if (Model.Photos.Count == 0)
+{
+    <p class="text-muted">@(Model.HasActiveFilters ? "No photos match these filters." : "No photos have been uploaded yet.")</p>
+}
+else
+{
+    <div class="photo-grid">
+        @foreach (var photo in Model.Photos)
+        {
+            <a class="photo-tile" asp-page="/Photos/View" asp-route-id="@photo.Id">
+                <img src="/api/photos/@photo.Id/thumbnail" loading="lazy"
+                     alt="@photo.Stage photo for @(photo.Vehicle.Reg ?? photo.Vehicle.Vin)" />
+                <span class="photo-seq">@photo.Stage</span>
+                @if (photo.Part is not null)
+                {
+                    <span class="photo-part">@Html.DisplayFor(_ => photo.Part)</span>
+                }
+            </a>
+        }
+    </div>
+}

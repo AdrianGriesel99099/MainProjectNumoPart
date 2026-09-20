@@ -16,3 +16,4 @@ Changelog entry back to the proposal that produced it.
 
 <!-- No items yet. -->
 Build: Safe Photo's to send (proposal #8): Add a way to select photos on a vehicle's page and export them as a PDF or a zip of JPEGs, each one carrying its stage, part, date, and comment thread, so staff can hand a client a clean set of photos without screenshotting or forwarding raw uploads. This is a download only, not an email sender — staff attach the file wherever they already message clients. When exporting, staff can choose whether to include the damage-mark pins burned onto the photo or just the plain image with its text comments.
+Build: Stage (proposal #9): Add two new stages to the photo stage-grouping — Wheel alignment and Diagnostics — alongside the existing Check-in, Quote, Progress, Checkout, and Extra, so photos taken during those parts of a job get filed under their own heading instead of being lumped into Extra.

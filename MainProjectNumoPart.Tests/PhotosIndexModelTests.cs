@@ -80,5 +80,127 @@ namespace MainProjectNumoPart.Tests
             Assert.Equal(1, model.TotalMatchCount);
             Assert.False(model.IsTruncated);
         }
+
+        [Fact]
+        public async Task OnGetAsync_WithNoDateFilters_HasNoDateRangeWarnings()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+
+            var model = new IndexModel(db);
+            await model.OnGetAsync();
+
+            Assert.Empty(model.DateRangeWarnings);
+        }
+
+        [Fact]
+        public async Task OnGetAsync_WithValidUploadedRange_HasNoDateRangeWarnings()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+
+            var model = new IndexModel(db)
+            {
+                UploadedFrom = new DateTime(2026, 1, 1),
+                UploadedTo = new DateTime(2026, 1, 31)
+            };
+            await model.OnGetAsync();
+
+            Assert.Empty(model.DateRangeWarnings);
+        }
+
+        // The bug this pins: swapping the 'from' and 'to' dates by mistake used to just filter
+        // out every photo with no indication why -- an empty grid looks identical whether the
+        // vehicle genuinely has nothing in range or the dates were entered backwards.
+        [Fact]
+        public async Task OnGetAsync_WithUploadedFromAfterUploadedTo_ReportsWarningAndFindsNothing()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var vehicle = new Vehicle { Vin = "V1", BlobFolderName = "V1", CreatedAtUtc = DateTime.UtcNow };
+            db.Vehicles.Add(vehicle);
+            db.SaveChanges();
+            SeedPhoto(db, vehicle, 1);
+            db.SaveChanges();
+
+            var model = new IndexModel(db)
+            {
+                UploadedFrom = new DateTime(2026, 1, 31),
+                UploadedTo = new DateTime(2026, 1, 1)
+            };
+            await model.OnGetAsync();
+
+            Assert.Equal(0, model.TotalMatchCount);
+            var warning = Assert.Single(model.DateRangeWarnings);
+            Assert.Contains("Uploaded", warning);
+        }
+
+        [Fact]
+        public async Task OnGetAsync_WithTakenFromAfterTakenTo_ReportsWarning()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+
+            var model = new IndexModel(db)
+            {
+                TakenFrom = new DateTime(2026, 1, 31),
+                TakenTo = new DateTime(2026, 1, 1)
+            };
+            await model.OnGetAsync();
+
+            var warning = Assert.Single(model.DateRangeWarnings);
+            Assert.Contains("Taken", warning);
+        }
+
+        [Fact]
+        public async Task OnGetAsync_WithBothRangesInverted_ReportsBothWarnings()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+
+            var model = new IndexModel(db)
+            {
+                UploadedFrom = new DateTime(2026, 1, 31),
+                UploadedTo = new DateTime(2026, 1, 1),
+                TakenFrom = new DateTime(2026, 2, 28),
+                TakenTo = new DateTime(2026, 2, 1)
+            };
+            await model.OnGetAsync();
+
+            Assert.Equal(2, model.DateRangeWarnings.Count);
+        }
+
+        // Same date for 'from' and 'to' is a valid one-day range, not an inversion.
+        [Fact]
+        public async Task OnGetAsync_WithEqualFromAndToDates_HasNoDateRangeWarnings()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+
+            var model = new IndexModel(db)
+            {
+                UploadedFrom = new DateTime(2026, 1, 15),
+                UploadedTo = new DateTime(2026, 1, 15)
+            };
+            await model.OnGetAsync();
+
+            Assert.Empty(model.DateRangeWarnings);
+        }
+
+        [Fact]
+        public async Task OnGetAsync_WithNoQueryParameters_HasNoActiveFilters()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+
+            var model = new IndexModel(db);
+            await model.OnGetAsync();
+
+            Assert.False(model.HasActiveFilters);
+        }
+
+        [Fact]
+        public async Task OnGetAsync_WithAStageFilter_HasActiveFilters()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+
+            var model = new IndexModel(db) { Stage = Stage.Checkin };
+            await model.OnGetAsync();
+
+            Assert.True(model.HasActiveFilters);
+        }
     }
 }

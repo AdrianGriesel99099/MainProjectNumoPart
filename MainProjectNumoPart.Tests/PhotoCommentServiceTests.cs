@@ -83,17 +83,45 @@ namespace MainProjectNumoPart.Tests
         }
 
         [Fact]
-        public async Task DeleteAsync_RemovesTheComment()
+        public async Task DeleteAsync_AllowsTheAuthorToRemoveTheirOwnComment()
         {
             using var db = TestDbContextFactory.CreateInMemory();
             var photo = SeedPhoto(db);
             await Build(db).AddAsync(photo.Id, "text", "u1", "staff@w.local");
             var id = db.PhotoComments.Single().Id;
 
-            var result = await Build(db).DeleteAsync(id);
+            var result = await Build(db).DeleteAsync(id, "u1", requesterIsAdmin: false);
 
             Assert.Equal(NoteStatus.Success, result.Status);
             Assert.Empty(db.PhotoComments);
+        }
+
+        [Fact]
+        public async Task DeleteAsync_AllowsAnAdminToRemoveSomeoneElsesComment()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var photo = SeedPhoto(db);
+            await Build(db).AddAsync(photo.Id, "text", "u1", "staff@w.local");
+            var id = db.PhotoComments.Single().Id;
+
+            var result = await Build(db).DeleteAsync(id, "admin1", requesterIsAdmin: true);
+
+            Assert.Equal(NoteStatus.Success, result.Status);
+            Assert.Empty(db.PhotoComments);
+        }
+
+        [Fact]
+        public async Task DeleteAsync_RejectsANonAdminDeletingSomeoneElsesComment()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var photo = SeedPhoto(db);
+            await Build(db).AddAsync(photo.Id, "text", "u1", "staff@w.local");
+            var id = db.PhotoComments.Single().Id;
+
+            var result = await Build(db).DeleteAsync(id, "u2", requesterIsAdmin: false);
+
+            Assert.Equal(NoteStatus.Forbidden, result.Status);
+            Assert.Single(db.PhotoComments);
         }
 
         [Fact]
@@ -101,7 +129,7 @@ namespace MainProjectNumoPart.Tests
         {
             using var db = TestDbContextFactory.CreateInMemory();
 
-            var result = await Build(db).DeleteAsync(999);
+            var result = await Build(db).DeleteAsync(999, "u1", requesterIsAdmin: false);
 
             Assert.Equal(NoteStatus.NotFound, result.Status);
         }

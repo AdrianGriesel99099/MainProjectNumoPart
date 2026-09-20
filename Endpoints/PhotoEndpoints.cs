@@ -180,11 +180,25 @@ namespace MainProjectNumoPart.Endpoints
             group.MapDelete("/comments/{commentId:int}", async (
                 int commentId,
                 PhotoCommentService comments,
+                UserManager<IdentityUser> userManager,
+                HttpContext http,
                 CancellationToken ct) =>
             {
-                var result = await comments.DeleteAsync(commentId, ct);
-                return result.Status == NoteStatus.Success ? Results.NoContent() : Results.NotFound();
-            }).RequireAuthorization(policy => policy.RequireRole(Roles.Admin));
+                var userId = userManager.GetUserId(http.User)!;
+                var result = await comments.DeleteAsync(commentId, userId, http.User.IsAdmin(), ct);
+
+                return result.Status switch
+                {
+                    NoteStatus.Success => Results.NoContent(),
+                    NoteStatus.Forbidden => Results.StatusCode(StatusCodes.Status403Forbidden),
+                    _ => Results.NotFound()
+                };
+            })
+            // Two arguments, never the comma-joined Roles.StaffOrAdmin constant — see the
+            // tagging endpoint above for why that silently denies everyone. Staff, not just
+            // Admin, can reach this now — DeleteAsync itself enforces that only the comment's
+            // own author or an Admin can actually remove it.
+            .RequireAuthorization(policy => policy.RequireRole(Roles.Staff, Roles.Admin));
         }
     }
 }

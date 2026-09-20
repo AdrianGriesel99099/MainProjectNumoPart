@@ -6,6 +6,47 @@
     "link": "/Features/8"
   },
   {
+    "date": "2026-09-20",
+    "title": "Feature added: edit job-card updates and photo comments in place",
+    "description": "Staff can now edit their own job-card updates and photo comments to fix typos or add details, keeping the original timestamp and author attribution while only the text changes."
+  },
+  {
+    "date": "2026-09-20",
+    "title": "Feature added: Last activity and stale-job badge on the All Vehicles page",
+    "description": "The /Vehicles browse page now shows when each vehicle was last updated (with a Stale badge if idle more than 7 days), so you can see at a glance which jobs are moving and which need attention."
+  },
+  {
+    "date": "2026-09-16",
+    "title": "Feature added: Stage column on the All vehicles page",
+    "description": "The /Vehicles browse page now shows each vehicle's current workflow stage in a dedicated column, matching the home page display so you can see at a glance where each vehicle stands in the process."
+  },
+  {
+    "date": "2026-09-16",
+    "title": "Feature added: comment-count badge on vehicle photo tiles",
+    "description": "A small comment-count badge now appears on photo tiles in the stage strips, letting you see at a glance which photos have notes without opening each one."
+  },
+  {
+    "date": "2026-09-15",
+    "title": "Feature added: Wheel alignment and Diagnostics photo stages",
+    "description": "Two new photo stages have been added to the photo workflow — Wheel alignment and Diagnostics — so photos taken during those specific parts of a job now get their own dedicated grouping instead of being lumped into the Extra category.",
+    "link": "/Features/9"
+  },
+  {
+    "date": "2026-09-15",
+    "title": "Feature added: search filter on the All vehicles page",
+    "description": "The /Vehicles page now has a search box to filter the list by VIN/Reg fragment or make/model substring, so you can find a specific vehicle without paging through 25 at a time."
+  },
+  {
+    "date": "2026-09-14",
+    "title": "Feature added: paginated All Vehicles page",
+    "description": "A new /Vehicles page lets you browse all vehicles chronologically, paginated 25 at a time, so you can look through older work without having to search by VIN or registration number."
+  },
+  {
+    "date": "2026-09-14",
+    "title": "Feature added: current stage column on vehicle lists",
+    "description": "The home page vehicle lists now show each vehicle's current workflow stage (Checkin, Quote, Progress, Checkout, or Extra) based on its most recent photo, so you can see at a glance where it stands without opening the Details page."
+  },
+  {
     "date": "2026-09-13",
     "title": "Feature added: live vehicle search suggestions on the home page",
     "description": "As you search for a vehicle on the home page, a dropdown now shows matching suggestions in real time, letting you jump straight to the vehicle without waiting for a full search results page."

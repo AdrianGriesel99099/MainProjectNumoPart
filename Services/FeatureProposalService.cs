@@ -194,7 +194,26 @@ namespace MainProjectNumoPart.Services
         }
 
         public Task<List<FeatureProposal>> ListAsync(CancellationToken ct = default) =>
-            _db.FeatureProposals.OrderByDescending(p => p.CreatedAtUtc).ToListAsync(ct);
+            _db.FeatureProposals.Where(p => !p.IsArchived).OrderByDescending(p => p.CreatedAtUtc).ToListAsync(ct);
+
+        public async Task<FeatureProposalDecisionResult> ArchiveAsync(int proposalId, CancellationToken ct = default)
+        {
+            var proposal = await _db.FeatureProposals.FirstOrDefaultAsync(p => p.Id == proposalId, ct);
+            if (proposal is null)
+            {
+                return new FeatureProposalDecisionResult(FeatureProposalDecisionStatus.NotFound);
+            }
+            if (proposal.Status != FeatureProposalStatus.Denied)
+            {
+                return new FeatureProposalDecisionResult(FeatureProposalDecisionStatus.InvalidState,
+                    "Only a denied proposal can be archived.");
+            }
+
+            proposal.IsArchived = true;
+            await _db.SaveChangesAsync(ct);
+
+            return new FeatureProposalDecisionResult(FeatureProposalDecisionStatus.Success);
+        }
 
         public Task<FeatureProposal?> GetWithRoundsAsync(int id, CancellationToken ct = default) =>
             _db.FeatureProposals

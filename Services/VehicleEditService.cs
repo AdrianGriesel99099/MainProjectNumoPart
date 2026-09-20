@@ -58,6 +58,48 @@ namespace MainProjectNumoPart.Services
             // Checked before writing rather than relying on the unique index to throw, so the user
             // gets "that VIN belongs to another vehicle" instead of a DbUpdateException. Excludes
             // this vehicle so re-saving an unchanged form isn't a conflict with itself.
+            var conflict = await FindConflictAsync(vehicleId, normalizedVin, normalizedReg, ct);
+            if (conflict is not null) return conflict;
+
+            var previousVin = vehicle.Vin;
+            var previousReg = vehicle.Reg;
+
+            vehicle.Vin = normalizedVin;
+            vehicle.Reg = normalizedReg;
+            vehicle.MakeModel = string.IsNullOrWhiteSpace(makeModel) ? null : makeModel.Trim();
+
+            // BlobFolderName is deliberately NOT recomputed. Every existing photo's blob path was
+            // built from it, so changing it here would orphan every image this vehicle already has
+            // — the folder name is an immutable storage key, not a display value. It stops matching
+            // the VIN after a correction, which is expected and harmless.
+
+            try
+            {
+                await _db.SaveChangesAsync(ct);
+            }
+            catch (DbUpdateException ex) when (VehicleLookupService.IsUniqueConstraintViolation(ex))
+            {
+                // The AnyAsync check above and this save are two separate round trips, so another
+                // edit can claim the same VIN/Reg in between -- the same class of race
+                // VehicleLookupService.SaveWithRetryAsync already guards against for uploads.
+                // Unlike that path there's no sensible "resolve and merge" here (these are two
+                // distinct vehicles, not a duplicate create), so just report it as the same
+                // conflict the pre-check would have caught had it lost the race instead of won it.
+                return await FindConflictAsync(vehicleId, normalizedVin, normalizedReg, ct)
+                    ?? new VehicleEditResult(VehicleEditStatus.VinConflict,
+                        "That VIN or registration was just claimed by another vehicle. Please try again.");
+            }
+
+            _logger.LogInformation(
+                "Vehicle {VehicleId} edited by {EditorId}: Vin {OldVin}->{NewVin}, Reg {OldReg}->{NewReg}",
+                vehicle.Id, editorId, previousVin, normalizedVin, previousReg, normalizedReg);
+
+            return new VehicleEditResult(VehicleEditStatus.Updated);
+        }
+
+        private async Task<VehicleEditResult?> FindConflictAsync(
+            int vehicleId, string? normalizedVin, string? normalizedReg, CancellationToken ct)
+        {
             if (normalizedVin is not null)
             {
                 var clash = await _db.Vehicles
@@ -80,25 +122,7 @@ namespace MainProjectNumoPart.Services
                 }
             }
 
-            var previousVin = vehicle.Vin;
-            var previousReg = vehicle.Reg;
-
-            vehicle.Vin = normalizedVin;
-            vehicle.Reg = normalizedReg;
-            vehicle.MakeModel = string.IsNullOrWhiteSpace(makeModel) ? null : makeModel.Trim();
-
-            // BlobFolderName is deliberately NOT recomputed. Every existing photo's blob path was
-            // built from it, so changing it here would orphan every image this vehicle already has
-            // — the folder name is an immutable storage key, not a display value. It stops matching
-            // the VIN after a correction, which is expected and harmless.
-
-            await _db.SaveChangesAsync(ct);
-
-            _logger.LogInformation(
-                "Vehicle {VehicleId} edited by {EditorId}: Vin {OldVin}->{NewVin}, Reg {OldReg}->{NewReg}",
-                vehicle.Id, editorId, previousVin, normalizedVin, previousReg, normalizedReg);
-
-            return new VehicleEditResult(VehicleEditStatus.Updated);
+            return null;
         }
     }
 }

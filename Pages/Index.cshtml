@@ -32,7 +32,7 @@
            vehicle — let the user pick rather than guessing which one they meant. *@
         <p class="mt-3">@Model.SearchResults.Count vehicles match "@Model.Search":</p>
         <table class="table">
-            <thead><tr><th>VIN</th><th>Reg</th><th>Make/Model</th><th>Added</th><th>Tagging</th></tr></thead>
+            <thead><tr><th>VIN</th><th>Reg</th><th>Make/Model</th><th>Added</th><th>Stage</th><th>Tagging</th></tr></thead>
             <tbody>
             @foreach (var vehicle in Model.SearchResults)
             {
@@ -41,6 +41,16 @@
                     <td><a asp-page="/Vehicles/Details" asp-route-id="@vehicle.Id">@vehicle.Reg</a></td>
                     <td>@vehicle.MakeModel</td>
                     <td>@vehicle.CreatedAtUtc.ToString("d MMM yyyy")</td>
+                    <td>
+                    @if (Model.CurrentStage.TryGetValue(vehicle.Id, out var stage))
+                    {
+                        <span class="badge bg-info text-dark">@stage</span>
+                    }
+                    else
+                    {
+                        <span class="text-muted">No photos yet</span>
+                    }
+                    </td>
                     <td>
                     @if (Model.UntaggedCounts.TryGetValue(vehicle.Id, out var untaggedCount))
                     {
@@ -59,8 +69,12 @@
 
 <h3 class="mt-4">Recently added vehicles</h3>
 <table class="table">
-    <thead><tr><th>VIN</th><th>Reg</th><th>Make/Model</th><th>Added</th><th>Tagging</th></tr></thead>
+    <thead><tr><th>VIN</th><th>Reg</th><th>Make/Model</th><th>Added</th><th>Stage</th><th>Tagging</th></tr></thead>
     <tbody>
+    @if (Model.RecentVehicles.Count == 0)
+    {
+        <tr><td colspan="6" class="text-muted">No vehicles yet.</td></tr>
+    }
     @foreach (var vehicle in Model.RecentVehicles)
     {
         <tr>
@@ -68,6 +82,16 @@
             <td><a asp-page="/Vehicles/Details" asp-route-id="@vehicle.Id">@vehicle.Reg</a></td>
             <td>@vehicle.MakeModel</td>
             <td>@vehicle.CreatedAtUtc.ToString("d MMM yyyy")</td>
+            <td>
+            @if (Model.CurrentStage.TryGetValue(vehicle.Id, out var stage))
+            {
+                <span class="badge bg-info text-dark">@stage</span>
+            }
+            else
+            {
+                <span class="text-muted">No photos yet</span>
+            }
+            </td>
             <td>
             @if (Model.UntaggedCounts.TryGetValue(vehicle.Id, out var untaggedCount))
             {

@@ -86,17 +86,45 @@ namespace MainProjectNumoPart.Tests
         }
 
         [Fact]
-        public async Task DeleteAsync_RemovesTheUpdate()
+        public async Task DeleteAsync_AllowsTheAuthorToRemoveTheirOwnUpdate()
         {
             using var db = TestDbContextFactory.CreateInMemory();
             var vehicle = SeedVehicle(db);
             await Build(db).AddAsync(vehicle.Id, "text", "u1", "staff@w.local");
             var id = db.VehicleUpdates.Single().Id;
 
-            var result = await Build(db).DeleteAsync(id);
+            var result = await Build(db).DeleteAsync(id, "u1", requesterIsAdmin: false);
 
             Assert.Equal(NoteStatus.Success, result.Status);
             Assert.Empty(db.VehicleUpdates);
+        }
+
+        [Fact]
+        public async Task DeleteAsync_AllowsAnAdminToRemoveSomeoneElsesUpdate()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var vehicle = SeedVehicle(db);
+            await Build(db).AddAsync(vehicle.Id, "text", "u1", "staff@w.local");
+            var id = db.VehicleUpdates.Single().Id;
+
+            var result = await Build(db).DeleteAsync(id, "admin1", requesterIsAdmin: true);
+
+            Assert.Equal(NoteStatus.Success, result.Status);
+            Assert.Empty(db.VehicleUpdates);
+        }
+
+        [Fact]
+        public async Task DeleteAsync_RejectsANonAdminDeletingSomeoneElsesUpdate()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var vehicle = SeedVehicle(db);
+            await Build(db).AddAsync(vehicle.Id, "text", "u1", "staff@w.local");
+            var id = db.VehicleUpdates.Single().Id;
+
+            var result = await Build(db).DeleteAsync(id, "u2", requesterIsAdmin: false);
+
+            Assert.Equal(NoteStatus.Forbidden, result.Status);
+            Assert.Single(db.VehicleUpdates);
         }
 
         [Fact]
@@ -104,7 +132,7 @@ namespace MainProjectNumoPart.Tests
         {
             using var db = TestDbContextFactory.CreateInMemory();
 
-            var result = await Build(db).DeleteAsync(999);
+            var result = await Build(db).DeleteAsync(999, "u1", requesterIsAdmin: false);
 
             Assert.Equal(NoteStatus.NotFound, result.Status);
         }
@@ -120,6 +148,117 @@ namespace MainProjectNumoPart.Tests
 
             var saved = db.VehicleUpdates.Single();
             Assert.Equal("gone@w.local", saved.AuthorEmail);
+        }
+
+        [Fact]
+        public async Task EditAsync_AllowsTheAuthorToChangeTheirOwnUpdate()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var vehicle = SeedVehicle(db);
+            await Build(db).AddAsync(vehicle.Id, "original text", "u1", "staff@w.local");
+            var id = db.VehicleUpdates.Single().Id;
+
+            var result = await Build(db).EditAsync(id, "corrected text", "u1", requesterIsAdmin: false);
+
+            Assert.Equal(NoteStatus.Success, result.Status);
+            Assert.Equal("corrected text", db.VehicleUpdates.Single().Body);
+        }
+
+        [Fact]
+        public async Task EditAsync_TrimsWhitespace()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var vehicle = SeedVehicle(db);
+            await Build(db).AddAsync(vehicle.Id, "original text", "u1", "staff@w.local");
+            var id = db.VehicleUpdates.Single().Id;
+
+            await Build(db).EditAsync(id, "  padded edit  ", "u1", requesterIsAdmin: false);
+
+            Assert.Equal("padded edit", db.VehicleUpdates.Single().Body);
+        }
+
+        [Fact]
+        public async Task EditAsync_DoesNotChangeCreatedAtUtc()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var vehicle = SeedVehicle(db);
+            await Build(db).AddAsync(vehicle.Id, "original text", "u1", "staff@w.local");
+            var original = db.VehicleUpdates.Single();
+            var createdAt = original.CreatedAtUtc;
+
+            await Build(db).EditAsync(original.Id, "corrected text", "u1", requesterIsAdmin: false);
+
+            Assert.Equal(createdAt, db.VehicleUpdates.Single().CreatedAtUtc);
+        }
+
+        [Fact]
+        public async Task EditAsync_AllowsAnAdminToChangeSomeoneElsesUpdate()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var vehicle = SeedVehicle(db);
+            await Build(db).AddAsync(vehicle.Id, "original text", "u1", "staff@w.local");
+            var id = db.VehicleUpdates.Single().Id;
+
+            var result = await Build(db).EditAsync(id, "corrected by admin", "admin1", requesterIsAdmin: true);
+
+            Assert.Equal(NoteStatus.Success, result.Status);
+            Assert.Equal("corrected by admin", db.VehicleUpdates.Single().Body);
+        }
+
+        [Fact]
+        public async Task EditAsync_RejectsANonAdminEditingSomeoneElsesUpdate()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var vehicle = SeedVehicle(db);
+            await Build(db).AddAsync(vehicle.Id, "original text", "u1", "staff@w.local");
+            var id = db.VehicleUpdates.Single().Id;
+
+            var result = await Build(db).EditAsync(id, "hijacked text", "u2", requesterIsAdmin: false);
+
+            Assert.Equal(NoteStatus.Forbidden, result.Status);
+            Assert.Equal("original text", db.VehicleUpdates.Single().Body);
+        }
+
+        [Fact]
+        public async Task EditAsync_ReturnsNotFoundForUnknownId()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+
+            var result = await Build(db).EditAsync(999, "text", "u1", requesterIsAdmin: false);
+
+            Assert.Equal(NoteStatus.NotFound, result.Status);
+        }
+
+        [Theory]
+        [InlineData(null)]
+        [InlineData("")]
+        [InlineData("   ")]
+        public async Task EditAsync_RejectsEmptyBody(string? body)
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var vehicle = SeedVehicle(db);
+            await Build(db).AddAsync(vehicle.Id, "original text", "u1", "staff@w.local");
+            var id = db.VehicleUpdates.Single().Id;
+
+            var result = await Build(db).EditAsync(id, body, "u1", requesterIsAdmin: false);
+
+            Assert.Equal(NoteStatus.EmptyBody, result.Status);
+            Assert.Equal("original text", db.VehicleUpdates.Single().Body);
+        }
+
+        [Fact]
+        public async Task EditAsync_RejectsBodyOverTheLengthCap()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var vehicle = SeedVehicle(db);
+            await Build(db).AddAsync(vehicle.Id, "original text", "u1", "staff@w.local");
+            var id = db.VehicleUpdates.Single().Id;
+            var tooLong = new string('x', VehicleUpdateService.MaxBodyLength + 1);
+
+            var result = await Build(db).EditAsync(id, tooLong, "u1", requesterIsAdmin: false);
+
+            Assert.Equal(NoteStatus.TooLong, result.Status);
+            Assert.Equal("original text", db.VehicleUpdates.Single().Body);
         }
     }
 }

@@ -57,12 +57,17 @@ namespace MainProjectNumoPart.Services
             return new NoteResult(NoteStatus.Success);
         }
 
-        public async Task<NoteResult> DeleteAsync(int commentId, CancellationToken ct = default)
+        public async Task<NoteResult> DeleteAsync(
+            int commentId, string requesterId, bool requesterIsAdmin, CancellationToken ct = default)
         {
             var comment = await _db.PhotoComments.FindAsync(new object[] { commentId }, ct);
             if (comment is null)
             {
                 return new NoteResult(NoteStatus.NotFound);
+            }
+            if (!requesterIsAdmin && comment.AuthorId != requesterId)
+            {
+                return new NoteResult(NoteStatus.Forbidden);
             }
 
             _db.PhotoComments.Remove(comment);
