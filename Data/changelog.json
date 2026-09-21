@@ -1,5 +1,10 @@
 [
   {
+    "date": "2026-09-21",
+    "title": "Feature added: filter All Vehicles page by vehicles needing tagging",
+    "description": "A new checkbox on the All Vehicles page lets you show only vehicles with untagged photos, so you can quickly see which jobs need photo tagging and skip the fully tagged ones."
+  },
+  {
     "date": "2026-09-20",
     "title": "Feature added: photo export as PDF or zip with metadata and damage pins",
     "description": "Export selected photos as a PDF or zip file. Each export includes the photo's stage, part, date, and comment thread. Optionally burn damage-mark pins directly into each image before export.",
