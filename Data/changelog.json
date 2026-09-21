@@ -1,6 +1,11 @@
 [
   {
     "date": "2026-09-21",
+    "title": "Feature added: filter All Vehicles page by vehicles needing tagging",
+    "description": "A new checkbox on the All Vehicles page lets you show only vehicles with untagged photos, so you can quickly see which jobs need photo tagging and skip the fully tagged ones."
+  },
+  {
+    "date": "2026-09-21",
     "title": "Feature added: edit photo comments in place",
     "description": "You can now edit a photo comment to fix a typo or add detail, keeping the original timestamp and author. Staff can edit their own comments; admins can edit any comment."
   },
