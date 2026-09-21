@@ -34,6 +34,12 @@ namespace MainProjectNumoPart.Pages.Vehicles
         [BindProperty(SupportsGet = true)]
         public string? Search { get; set; }
 
+        // Narrows the browse list to vehicles with at least one untagged photo -- the same
+        // condition that puts the warning badge in the Tagging column, surfaced as a filter so
+        // staff can pull up the whole backlog instead of scanning the badge column page by page.
+        [BindProperty(SupportsGet = true)]
+        public bool NeedsTaggingOnly { get; set; }
+
         public List<Vehicle> Vehicles { get; set; } = new();
         public int TotalCount { get; set; }
         public int TotalPages => (int)Math.Ceiling(TotalCount / (double)PageSize);
@@ -61,6 +67,11 @@ namespace MainProjectNumoPart.Pages.Vehicles
                     (v.Vin != null && v.Vin.Contains(identifierFragment)) ||
                     (v.Reg != null && v.Reg.Contains(identifierFragment)) ||
                     (v.MakeModel != null && v.MakeModel.ToUpper().Contains(makeModelFragment)));
+            }
+
+            if (NeedsTaggingOnly)
+            {
+                query = query.Where(v => v.Photos.Any(p => p.Part == null));
             }
 
             TotalCount = await query.CountAsync();
