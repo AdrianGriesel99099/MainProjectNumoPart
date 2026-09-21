@@ -90,9 +90,14 @@
     </script>
 }
 
-@if (User.CanUpload())
-{
-    <script>
+@* Not gated by User.CanUpload(): the Edit/Delete BUTTONS above are gated by CanDeleteNote
+   (author-or-admin), a broader and independent condition -- a Staff member who posted an update
+   and was later demoted to Viewer still passes CanDeleteNote but fails CanUpload. Gating this
+   listener-attachment script on CanUpload left that user's own Edit/Delete buttons rendered but
+   dead: no listener ever attached, so clicking did nothing with no feedback. querySelectorAll
+   over zero matching elements is a safe no-op for everyone else, exactly like damagemarks.js
+   (loaded unconditionally) already does for its own delete button. *@
+<script>
         document.querySelectorAll('.job-update-delete').forEach(btn => {
             btn.addEventListener('click', async () => {
                 if (!confirm('Delete this update? This cannot be undone.')) return;
@@ -106,11 +111,8 @@
             });
         });
     </script>
-}
 
-@if (User.CanUpload())
-{
-    <script>
+<script>
         document.querySelectorAll('.job-update-edit').forEach(btn => {
             btn.addEventListener('click', () => {
                 const entry = btn.closest('.job-card-entry');
@@ -152,7 +154,6 @@
             });
         });
     </script>
-}
 
 @* Always rendered, unlike the coverage list below — marking damage should work from the moment
    a vehicle exists, before any photo has been taken, so it can't depend on Photos.Count. *@
