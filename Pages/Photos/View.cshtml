@@ -54,9 +54,16 @@
                     <span class="fw-semibold">@comment.AuthorEmail</span>
                     <span class="text-muted small">@comment.CreatedAtUtc.ToString("d MMM yyyy, HH:mm")</span>
                 </div>
-                <p class="mb-1" style="white-space: pre-wrap;">@comment.Body</p>
+                <p class="mb-1 comment-body" style="white-space: pre-wrap;">@comment.Body</p>
                 @if (User.CanDeleteNote(comment.AuthorId))
                 {
+                    <div class="comment-edit-form d-none mb-1">
+                        <textarea class="form-control comment-edit-textarea" rows="2" maxlength="2000">@comment.Body</textarea>
+                        <button type="button" class="btn btn-sm btn-primary mt-1 comment-edit-save" data-comment-id="@comment.Id">Save</button>
+                        <button type="button" class="btn btn-sm btn-link mt-1 comment-edit-cancel">Cancel</button>
+                        <div class="text-danger small mt-1 comment-edit-error"></div>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-secondary comment-edit" data-comment-id="@comment.Id">Edit</button>
                     <button type="button" class="btn btn-sm btn-outline-danger comment-delete" data-comment-id="@comment.Id">Delete</button>
                 }
             </div>
@@ -105,6 +112,52 @@
                     document.querySelector(`[data-comment-id="${id}"]`).remove();
                 } else {
                     alert('Delete failed.');
+                }
+            });
+        });
+    </script>
+}
+
+@if (User.CanUpload())
+{
+    <script>
+        document.querySelectorAll('.comment-edit').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const entry = btn.closest('[data-comment-id]');
+                entry.querySelector('.comment-body').classList.add('d-none');
+                entry.querySelector('.comment-edit-form').classList.remove('d-none');
+                btn.classList.add('d-none');
+                entry.querySelector('.comment-delete').classList.add('d-none');
+            });
+        });
+
+        document.querySelectorAll('.comment-edit-cancel').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const entry = btn.closest('[data-comment-id]');
+                entry.querySelector('.comment-edit-textarea').value = entry.querySelector('.comment-body').textContent;
+                entry.querySelector('.comment-edit-error').textContent = '';
+                entry.querySelector('.comment-edit-form').classList.add('d-none');
+                entry.querySelector('.comment-body').classList.remove('d-none');
+                entry.querySelector('.comment-edit').classList.remove('d-none');
+                entry.querySelector('.comment-delete').classList.remove('d-none');
+            });
+        });
+
+        document.querySelectorAll('.comment-edit-save').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const entry = btn.closest('[data-comment-id]');
+                const id = btn.dataset.commentId;
+                const body = entry.querySelector('.comment-edit-textarea').value;
+                const response = await fetch(`/api/photos/comments/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ body })
+                });
+                if (response.status === 200) {
+                    window.location.reload();
+                } else {
+                    entry.querySelector('.comment-edit-error').textContent =
+                        (await response.text()) || 'Could not save the comment.';
                 }
             });
         });

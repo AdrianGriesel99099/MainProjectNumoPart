@@ -143,5 +143,116 @@ namespace MainProjectNumoPart.Tests
 
             Assert.Equal("gone@w.local", db.PhotoComments.Single().AuthorEmail);
         }
+
+        [Fact]
+        public async Task EditAsync_AllowsTheAuthorToChangeTheirOwnComment()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var photo = SeedPhoto(db);
+            await Build(db).AddAsync(photo.Id, "original text", "u1", "staff@w.local");
+            var id = db.PhotoComments.Single().Id;
+
+            var result = await Build(db).EditAsync(id, "corrected text", "u1", requesterIsAdmin: false);
+
+            Assert.Equal(NoteStatus.Success, result.Status);
+            Assert.Equal("corrected text", db.PhotoComments.Single().Body);
+        }
+
+        [Fact]
+        public async Task EditAsync_TrimsWhitespace()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var photo = SeedPhoto(db);
+            await Build(db).AddAsync(photo.Id, "original text", "u1", "staff@w.local");
+            var id = db.PhotoComments.Single().Id;
+
+            await Build(db).EditAsync(id, "  padded edit  ", "u1", requesterIsAdmin: false);
+
+            Assert.Equal("padded edit", db.PhotoComments.Single().Body);
+        }
+
+        [Fact]
+        public async Task EditAsync_DoesNotChangeCreatedAtUtc()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var photo = SeedPhoto(db);
+            await Build(db).AddAsync(photo.Id, "original text", "u1", "staff@w.local");
+            var original = db.PhotoComments.Single();
+            var createdAt = original.CreatedAtUtc;
+
+            await Build(db).EditAsync(original.Id, "corrected text", "u1", requesterIsAdmin: false);
+
+            Assert.Equal(createdAt, db.PhotoComments.Single().CreatedAtUtc);
+        }
+
+        [Fact]
+        public async Task EditAsync_AllowsAnAdminToChangeSomeoneElsesComment()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var photo = SeedPhoto(db);
+            await Build(db).AddAsync(photo.Id, "original text", "u1", "staff@w.local");
+            var id = db.PhotoComments.Single().Id;
+
+            var result = await Build(db).EditAsync(id, "corrected by admin", "admin1", requesterIsAdmin: true);
+
+            Assert.Equal(NoteStatus.Success, result.Status);
+            Assert.Equal("corrected by admin", db.PhotoComments.Single().Body);
+        }
+
+        [Fact]
+        public async Task EditAsync_RejectsANonAdminEditingSomeoneElsesComment()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var photo = SeedPhoto(db);
+            await Build(db).AddAsync(photo.Id, "original text", "u1", "staff@w.local");
+            var id = db.PhotoComments.Single().Id;
+
+            var result = await Build(db).EditAsync(id, "hijacked text", "u2", requesterIsAdmin: false);
+
+            Assert.Equal(NoteStatus.Forbidden, result.Status);
+            Assert.Equal("original text", db.PhotoComments.Single().Body);
+        }
+
+        [Fact]
+        public async Task EditAsync_ReturnsNotFoundForUnknownId()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+
+            var result = await Build(db).EditAsync(999, "text", "u1", requesterIsAdmin: false);
+
+            Assert.Equal(NoteStatus.NotFound, result.Status);
+        }
+
+        [Theory]
+        [InlineData(null)]
+        [InlineData("")]
+        [InlineData("   ")]
+        public async Task EditAsync_RejectsEmptyBody(string? body)
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var photo = SeedPhoto(db);
+            await Build(db).AddAsync(photo.Id, "original text", "u1", "staff@w.local");
+            var id = db.PhotoComments.Single().Id;
+
+            var result = await Build(db).EditAsync(id, body, "u1", requesterIsAdmin: false);
+
+            Assert.Equal(NoteStatus.EmptyBody, result.Status);
+            Assert.Equal("original text", db.PhotoComments.Single().Body);
+        }
+
+        [Fact]
+        public async Task EditAsync_RejectsBodyOverTheLengthCap()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var photo = SeedPhoto(db);
+            await Build(db).AddAsync(photo.Id, "original text", "u1", "staff@w.local");
+            var id = db.PhotoComments.Single().Id;
+            var tooLong = new string('x', PhotoCommentService.MaxBodyLength + 1);
+
+            var result = await Build(db).EditAsync(id, tooLong, "u1", requesterIsAdmin: false);
+
+            Assert.Equal(NoteStatus.TooLong, result.Status);
+            Assert.Equal("original text", db.PhotoComments.Single().Body);
+        }
     }
 }
