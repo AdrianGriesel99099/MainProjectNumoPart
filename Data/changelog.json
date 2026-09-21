@@ -1,5 +1,10 @@
 [
   {
+    "date": "2026-09-21",
+    "title": "Feature added: edit photo comments in place",
+    "description": "You can now edit a photo comment to fix a typo or add detail, keeping the original timestamp and author. Staff can edit their own comments; admins can edit any comment."
+  },
+  {
     "date": "2026-09-20",
     "title": "Feature added: photo export as PDF or zip with metadata and damage pins",
     "description": "Export selected photos as a PDF or zip file. Each export includes the photo's stage, part, date, and comment thread. Optionally burn damage-mark pins directly into each image before export.",
