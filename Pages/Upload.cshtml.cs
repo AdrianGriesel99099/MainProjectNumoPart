@@ -17,6 +17,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.Data.Sqlite;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
+using SixLabors.ImageSharp;
 
 namespace MainProjectNumoPart.Pages
 {
@@ -171,6 +172,7 @@ namespace MainProjectNumoPart.Pages
             for (var attempt = 1; attempt <= maxAttempts; attempt++)
             {
                 var uploadedBlobPaths = new List<(string original, string? thumbnail)>();
+                string? currentFileName = null;
 
                 try
                 {
@@ -178,6 +180,7 @@ namespace MainProjectNumoPart.Pages
 
                     foreach (var file in Files)
                     {
+                        currentFileName = file.FileName;
                         var sequenceNumber = nextSequenceNumber++;
                         var originalExtension = Path.GetExtension(file.FileName);
                         var originalFileName = PhotoNaming.BuildFileName(vehicle.Vin, vehicle.Reg, sequenceNumber, originalExtension);
@@ -240,6 +243,16 @@ namespace MainProjectNumoPart.Pages
                     // freshly-read sequence number.
                     await CleanUpBlobsAsync(uploadedBlobPaths);
                     _db.ChangeTracker.Clear(); // discard this attempt's tracked-but-unsaved Photo rows
+                }
+                catch (ImageFormatException)
+                {
+                    // The Content-Type/size checks above only trust what the browser claims about
+                    // the file — Image.LoadAsync inside ThumbnailGenerator is what actually proves
+                    // the bytes decode. A corrupt upload, a truncated transfer, or a phone-saved
+                    // HEIC renamed to .jpg all land here instead of as an unhandled 500.
+                    await CleanUpBlobsAsync(uploadedBlobPaths);
+                    ErrorMessage = $"{currentFileName}: doesn't look like a valid JPEG or PNG file — it may be corrupted, or a different format than its name suggests.";
+                    return Page();
                 }
                 catch
                 {

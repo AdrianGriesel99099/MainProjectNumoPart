@@ -218,7 +218,7 @@ waiting on an Admin, but still can't touch someone else's entry.
       vehicle page.
 - [ ] On a photo's page, both dates are shown — "Uploaded" always has a value; "Taken" shows
       "Not recorded" for a photo with no EXIF/manual date rather than a blank or an error.
-- [ ] Post and delete a photo comment, same author-or-admin rules as the job card above.
+- [ ] Post, edit and delete a photo comment, same author-or-admin rules as the job card above.
 - [ ] Delete the user who wrote a comment or update, then reload the page it's on — the entry
       still shows their original email, and its Delete button is gone for everyone but an Admin
       (its `AuthorId` no longer matches any signed-in account). This is `AuthorEmail`, captured
