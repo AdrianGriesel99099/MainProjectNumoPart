@@ -100,27 +100,32 @@
     </script>
 }
 
-@if (User.CanUpload())
-{
-    <script>
-        document.querySelectorAll('.comment-delete').forEach(btn => {
-            btn.addEventListener('click', async () => {
-                if (!confirm('Delete this comment? This cannot be undone.')) return;
-                const id = btn.dataset.commentId;
-                const response = await fetch(`/api/photos/comments/${id}`, { method: 'DELETE' });
-                if (response.status === 204) {
-                    document.querySelector(`[data-comment-id="${id}"]`).remove();
-                } else {
-                    alert('Delete failed.');
-                }
-            });
+@* Not gated by User.CanUpload(): the Delete BUTTON above is gated by CanDeleteNote
+   (author-or-admin), a broader and independent condition -- a Staff member who posted a comment
+   and was later demoted to Viewer still passes CanDeleteNote but fails CanUpload. Gating this
+   listener-attachment script on CanUpload left that user's own Delete button rendered but dead:
+   no listener ever attached, so clicking did nothing with no feedback. querySelectorAll over
+   zero matching elements is a safe no-op for everyone else, exactly like damagemarks.js (loaded
+   unconditionally on the vehicle page) already does for its own delete button. *@
+<script>
+    document.querySelectorAll('.comment-delete').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            if (!confirm('Delete this comment? This cannot be undone.')) return;
+            const id = btn.dataset.commentId;
+            const response = await fetch(`/api/photos/comments/${id}`, { method: 'DELETE' });
+            if (response.status === 204) {
+                document.querySelector(`[data-comment-id="${id}"]`).remove();
+            } else {
+                alert('Delete failed.');
+            }
         });
-    </script>
-}
+    });
+</script>
 
-@if (User.CanUpload())
-{
-    <script>
+@* Same reasoning as the comment-delete script above: the Edit/Save/Cancel BUTTONS are gated by
+   CanDeleteNote (author-or-admin), not CanUpload, so this listener-attachment script must not be
+   gated by CanUpload either. *@
+<script>
         document.querySelectorAll('.comment-edit').forEach(btn => {
             btn.addEventListener('click', () => {
                 const entry = btn.closest('.comment-entry');
@@ -162,4 +167,3 @@
             });
         });
     </script>
-}
