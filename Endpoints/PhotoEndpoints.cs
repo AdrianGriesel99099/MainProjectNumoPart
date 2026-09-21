@@ -18,6 +18,8 @@ namespace MainProjectNumoPart.Endpoints
 
         public record AddCommentRequest(string? Body);
 
+        public record EditCommentRequest(string? Body);
+
         public record ExportPhotosRequest(int[]? Ids, Services.PhotoExportFormat? Format, bool IncludeDamageMarks);
 
         public static void MapPhotoEndpoints(this WebApplication app)
@@ -175,6 +177,31 @@ namespace MainProjectNumoPart.Endpoints
             })
             // Two arguments, never the comma-joined Roles.StaffOrAdmin constant — see the
             // tagging endpoint above for why that silently denies everyone.
+            .RequireAuthorization(policy => policy.RequireRole(Roles.Staff, Roles.Admin));
+
+            group.MapPut("/comments/{commentId:int}", async (
+                int commentId,
+                EditCommentRequest? body,
+                PhotoCommentService comments,
+                UserManager<IdentityUser> userManager,
+                HttpContext http,
+                CancellationToken ct) =>
+            {
+                var userId = userManager.GetUserId(http.User)!;
+                var result = await comments.EditAsync(commentId, body?.Body, userId, http.User.IsAdmin(), ct);
+
+                return result.Status switch
+                {
+                    NoteStatus.Success => Results.Ok(),
+                    NoteStatus.Forbidden => Results.StatusCode(StatusCodes.Status403Forbidden),
+                    NoteStatus.NotFound => Results.NotFound(),
+                    _ => Results.BadRequest(result.Message)
+                };
+            })
+            // Two arguments, never the comma-joined Roles.StaffOrAdmin constant — see the
+            // tagging endpoint above for why that silently denies everyone. Staff, not just
+            // Admin, can reach this now — EditAsync itself enforces that only the comment's
+            // own author or an Admin can actually change it.
             .RequireAuthorization(policy => policy.RequireRole(Roles.Staff, Roles.Admin));
 
             group.MapDelete("/comments/{commentId:int}", async (
