@@ -100,66 +100,67 @@
     </script>
 }
 
-@if (User.CanUpload())
-{
-    <script>
-        document.querySelectorAll('.comment-delete').forEach(btn => {
-            btn.addEventListener('click', async () => {
-                if (!confirm('Delete this comment? This cannot be undone.')) return;
-                const id = btn.dataset.commentId;
-                const response = await fetch(`/api/photos/comments/${id}`, { method: 'DELETE' });
-                if (response.status === 204) {
-                    document.querySelector(`[data-comment-id="${id}"]`).remove();
-                } else {
-                    alert('Delete failed.');
-                }
-            });
+@* Not gated by User.CanUpload(): the buttons these scripts wire up are rendered per-comment
+   based on User.CanDeleteNote(comment.AuthorId) (author-or-admin), a broader and independent
+   check -- a comment's author keeps the right to edit/delete their own even after being
+   demoted off Staff/Admin (see ClaimsPrincipalExtensions.CanDeleteNote). Gating the wiring
+   behind CanUpload() left a demoted author's own old comments with Edit/Delete buttons that
+   rendered but had no click handler at all. querySelectorAll safely finds nothing here for a
+   user with no deletable comments, so this can run unconditionally for every signed-in role. *@
+<script>
+    document.querySelectorAll('.comment-delete').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            if (!confirm('Delete this comment? This cannot be undone.')) return;
+            const id = btn.dataset.commentId;
+            const response = await fetch(`/api/photos/comments/${id}`, { method: 'DELETE' });
+            if (response.status === 204) {
+                document.querySelector(`[data-comment-id="${id}"]`).remove();
+            } else {
+                alert('Delete failed.');
+            }
         });
-    </script>
-}
+    });
+</script>
 
-@if (User.CanUpload())
-{
-    <script>
-        document.querySelectorAll('.comment-edit').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const entry = btn.closest('.comment-entry');
-                entry.querySelector('.comment-body').classList.add('d-none');
-                entry.querySelector('.comment-edit-form').classList.remove('d-none');
-                btn.classList.add('d-none');
-                entry.querySelector('.comment-delete').classList.add('d-none');
-            });
+<script>
+    document.querySelectorAll('.comment-edit').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const entry = btn.closest('.comment-entry');
+            entry.querySelector('.comment-body').classList.add('d-none');
+            entry.querySelector('.comment-edit-form').classList.remove('d-none');
+            btn.classList.add('d-none');
+            entry.querySelector('.comment-delete').classList.add('d-none');
         });
+    });
 
-        document.querySelectorAll('.comment-edit-cancel').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const entry = btn.closest('.comment-entry');
-                entry.querySelector('.comment-edit-textarea').value = entry.querySelector('.comment-body').textContent;
-                entry.querySelector('.comment-edit-error').textContent = '';
-                entry.querySelector('.comment-edit-form').classList.add('d-none');
-                entry.querySelector('.comment-body').classList.remove('d-none');
-                entry.querySelector('.comment-edit').classList.remove('d-none');
-                entry.querySelector('.comment-delete').classList.remove('d-none');
-            });
+    document.querySelectorAll('.comment-edit-cancel').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const entry = btn.closest('.comment-entry');
+            entry.querySelector('.comment-edit-textarea').value = entry.querySelector('.comment-body').textContent;
+            entry.querySelector('.comment-edit-error').textContent = '';
+            entry.querySelector('.comment-edit-form').classList.add('d-none');
+            entry.querySelector('.comment-body').classList.remove('d-none');
+            entry.querySelector('.comment-edit').classList.remove('d-none');
+            entry.querySelector('.comment-delete').classList.remove('d-none');
         });
+    });
 
-        document.querySelectorAll('.comment-edit-save').forEach(btn => {
-            btn.addEventListener('click', async () => {
-                const entry = btn.closest('.comment-entry');
-                const id = btn.dataset.commentId;
-                const body = entry.querySelector('.comment-edit-textarea').value;
-                const response = await fetch(`/api/photos/comments/${id}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ body })
-                });
-                if (response.status === 200) {
-                    window.location.reload();
-                } else {
-                    entry.querySelector('.comment-edit-error').textContent =
-                        (await response.text()) || 'Could not save the comment.';
-                }
+    document.querySelectorAll('.comment-edit-save').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const entry = btn.closest('.comment-entry');
+            const id = btn.dataset.commentId;
+            const body = entry.querySelector('.comment-edit-textarea').value;
+            const response = await fetch(`/api/photos/comments/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ body })
             });
+            if (response.status === 200) {
+                window.location.reload();
+            } else {
+                entry.querySelector('.comment-edit-error').textContent =
+                    (await response.text()) || 'Could not save the comment.';
+            }
         });
-    </script>
-}
+    });
+</script>

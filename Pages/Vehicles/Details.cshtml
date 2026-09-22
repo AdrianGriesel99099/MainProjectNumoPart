@@ -101,69 +101,72 @@
     </script>
 }
 
-@if (User.CanUpload())
-{
-    <script>
-        document.querySelectorAll('.job-update-delete').forEach(btn => {
-            btn.addEventListener('click', async () => {
-                if (!confirm('Delete this update? This cannot be undone.')) return;
-                const id = btn.dataset.updateId;
-                const response = await fetch(`/api/vehicles/updates/${id}`, { method: 'DELETE' });
-                if (response.status === 204) {
-                    document.querySelector(`.job-card-entry[data-update-id="${id}"]`).remove();
-                } else {
-                    alert('Delete failed.');
-                }
-            });
+@* Not gated by User.CanUpload(): the buttons these scripts wire up are rendered per-update
+   based on User.CanDeleteNote(update.AuthorId) (author-or-admin), a broader and independent
+   check -- an update's author keeps the right to edit/delete their own even after being
+   demoted off Staff/Admin (see ClaimsPrincipalExtensions.CanDeleteNote). Gating the wiring
+   behind CanUpload() left a demoted author's own old updates with Edit/Delete buttons that
+   rendered but had no click handler at all -- the damage-marks list below, which has the same
+   author-or-admin delete rule, never made that mistake (its delete wiring runs unconditionally
+   too). querySelectorAll safely finds nothing here for a user with no deletable updates, so
+   this can run unconditionally for every signed-in role. *@
+<script>
+    document.querySelectorAll('.job-update-delete').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            if (!confirm('Delete this update? This cannot be undone.')) return;
+            const id = btn.dataset.updateId;
+            const response = await fetch(`/api/vehicles/updates/${id}`, { method: 'DELETE' });
+            if (response.status === 204) {
+                document.querySelector(`.job-card-entry[data-update-id="${id}"]`).remove();
+            } else {
+                alert('Delete failed.');
+            }
         });
-    </script>
-}
+    });
+</script>
 
-@if (User.CanUpload())
-{
-    <script>
-        document.querySelectorAll('.job-update-edit').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const entry = btn.closest('.job-card-entry');
-                entry.querySelector('.job-update-body').classList.add('d-none');
-                entry.querySelector('.job-update-edit-form').classList.remove('d-none');
-                btn.classList.add('d-none');
-                entry.querySelector('.job-update-delete').classList.add('d-none');
-            });
+<script>
+    document.querySelectorAll('.job-update-edit').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const entry = btn.closest('.job-card-entry');
+            entry.querySelector('.job-update-body').classList.add('d-none');
+            entry.querySelector('.job-update-edit-form').classList.remove('d-none');
+            btn.classList.add('d-none');
+            entry.querySelector('.job-update-delete').classList.add('d-none');
         });
+    });
 
-        document.querySelectorAll('.job-update-edit-cancel').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const entry = btn.closest('.job-card-entry');
-                entry.querySelector('.job-update-edit-textarea').value = entry.querySelector('.job-update-body').textContent;
-                entry.querySelector('.job-update-edit-error').textContent = '';
-                entry.querySelector('.job-update-edit-form').classList.add('d-none');
-                entry.querySelector('.job-update-body').classList.remove('d-none');
-                entry.querySelector('.job-update-edit').classList.remove('d-none');
-                entry.querySelector('.job-update-delete').classList.remove('d-none');
-            });
+    document.querySelectorAll('.job-update-edit-cancel').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const entry = btn.closest('.job-card-entry');
+            entry.querySelector('.job-update-edit-textarea').value = entry.querySelector('.job-update-body').textContent;
+            entry.querySelector('.job-update-edit-error').textContent = '';
+            entry.querySelector('.job-update-edit-form').classList.add('d-none');
+            entry.querySelector('.job-update-body').classList.remove('d-none');
+            entry.querySelector('.job-update-edit').classList.remove('d-none');
+            entry.querySelector('.job-update-delete').classList.remove('d-none');
         });
+    });
 
-        document.querySelectorAll('.job-update-edit-save').forEach(btn => {
-            btn.addEventListener('click', async () => {
-                const entry = btn.closest('.job-card-entry');
-                const id = btn.dataset.updateId;
-                const body = entry.querySelector('.job-update-edit-textarea').value;
-                const response = await fetch(`/api/vehicles/updates/${id}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ body })
-                });
-                if (response.status === 200) {
-                    window.location.reload();
-                } else {
-                    entry.querySelector('.job-update-edit-error').textContent =
-                        (await response.text()) || 'Could not save the update.';
-                }
+    document.querySelectorAll('.job-update-edit-save').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const entry = btn.closest('.job-card-entry');
+            const id = btn.dataset.updateId;
+            const body = entry.querySelector('.job-update-edit-textarea').value;
+            const response = await fetch(`/api/vehicles/updates/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ body })
             });
+            if (response.status === 200) {
+                window.location.reload();
+            } else {
+                entry.querySelector('.job-update-edit-error').textContent =
+                    (await response.text()) || 'Could not save the update.';
+            }
         });
-    </script>
-}
+    });
+</script>
 
 @* Always rendered, unlike the coverage list below — marking damage should work from the moment
    a vehicle exists, before any photo has been taken, so it can't depend on Photos.Count. *@
