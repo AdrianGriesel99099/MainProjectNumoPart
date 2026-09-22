@@ -40,6 +40,12 @@ namespace MainProjectNumoPart.Pages.Vehicles
         [BindProperty(SupportsGet = true)]
         public bool NeedsTaggingOnly { get; set; }
 
+        // Narrows the browse list to vehicles VehicleLastActivity.IsStale flags -- the same
+        // condition behind the "Stale" badge in the Last activity column, surfaced as a filter so
+        // a lead can pull up every forgotten job instead of scanning the badge page by page.
+        [BindProperty(SupportsGet = true)]
+        public bool StaleOnly { get; set; }
+
         public List<Vehicle> Vehicles { get; set; } = new();
         public int TotalCount { get; set; }
         public int TotalPages => (int)Math.Ceiling(TotalCount / (double)PageSize);
@@ -72,6 +78,16 @@ namespace MainProjectNumoPart.Pages.Vehicles
             if (NeedsTaggingOnly)
             {
                 query = query.Where(v => v.Photos.Any(p => p.Part == null));
+            }
+
+            if (StaleOnly)
+            {
+                var cutoff = DateTime.UtcNow - Services.VehicleLastActivity.StaleThreshold;
+                query = query.Where(v =>
+                    v.CreatedAtUtc < cutoff &&
+                    !v.Photos.Any(p => p.UploadedAtUtc >= cutoff) &&
+                    !v.VehicleUpdates.Any(u => u.CreatedAtUtc >= cutoff) &&
+                    !v.DamageMarks.Any(d => d.CreatedAtUtc >= cutoff));
             }
 
             TotalCount = await query.CountAsync();
