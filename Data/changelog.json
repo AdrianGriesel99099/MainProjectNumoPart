@@ -1,5 +1,10 @@
 [
   {
+    "date": "2026-09-22",
+    "title": "Feature added: filter All Vehicles by stale/needs attention",
+    "description": "A new checkbox on the All Vehicles page lets you show only vehicles that haven't been updated in over a week (marked as stale), so you can quickly see which jobs need attention and skip the active ones."
+  },
+  {
     "date": "2026-09-21",
     "title": "Feature added: filter All Vehicles page by vehicles needing tagging",
     "description": "A new checkbox on the All Vehicles page lets you show only vehicles with untagged photos, so you can quickly see which jobs need photo tagging and skip the fully tagged ones."
