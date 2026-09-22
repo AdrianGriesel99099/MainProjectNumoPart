@@ -16,10 +16,15 @@
                class="form-check-input" checked="@Model.NeedsTaggingOnly" />
         <label class="form-check-label" for="needsTaggingOnly">Needs tagging only</label>
     </div>
+    <div class="col-auto form-check">
+        <input type="checkbox" name="StaleOnly" value="true" id="staleOnly"
+               class="form-check-input" checked="@Model.StaleOnly" />
+        <label class="form-check-label" for="staleOnly">Needs attention only</label>
+    </div>
     <div class="col-auto">
         <button type="submit" class="btn btn-outline-secondary">Search</button>
     </div>
-    @if (!string.IsNullOrWhiteSpace(Model.Search) || Model.NeedsTaggingOnly)
+    @if (!string.IsNullOrWhiteSpace(Model.Search) || Model.NeedsTaggingOnly || Model.StaleOnly)
     {
         <div class="col-auto">
             <a asp-page="/Vehicles/Index" class="btn btn-link">Clear</a>
@@ -31,6 +36,7 @@
     @Model.TotalCount vehicle@(Model.TotalCount == 1 ? "" : "s")
     @(string.IsNullOrWhiteSpace(Model.Search) ? "total." : $"matching \"{Model.Search}\".")
     @(Model.NeedsTaggingOnly ? "Showing only vehicles that still need tagging." : "")
+    @(Model.StaleOnly ? "Showing only vehicles that need attention." : "")
 </p>
 
 <table class="table">
@@ -86,13 +92,13 @@
     <nav aria-label="Vehicle list pages">
         <ul class="pagination">
             <li class="page-item @(Model.PageNumber <= 1 ? "disabled" : "")">
-                <a class="page-link" asp-page="/Vehicles/Index" asp-route-PageNumber="@(Model.PageNumber - 1)" asp-route-Search="@Model.Search" asp-route-NeedsTaggingOnly="@Model.NeedsTaggingOnly">Previous</a>
+                <a class="page-link" asp-page="/Vehicles/Index" asp-route-PageNumber="@(Model.PageNumber - 1)" asp-route-Search="@Model.Search" asp-route-NeedsTaggingOnly="@Model.NeedsTaggingOnly" asp-route-StaleOnly="@Model.StaleOnly">Previous</a>
             </li>
             <li class="page-item disabled">
                 <span class="page-link">Page @Model.PageNumber of @Model.TotalPages</span>
             </li>
             <li class="page-item @(Model.PageNumber >= Model.TotalPages ? "disabled" : "")">
-                <a class="page-link" asp-page="/Vehicles/Index" asp-route-PageNumber="@(Model.PageNumber + 1)" asp-route-Search="@Model.Search" asp-route-NeedsTaggingOnly="@Model.NeedsTaggingOnly">Next</a>
+                <a class="page-link" asp-page="/Vehicles/Index" asp-route-PageNumber="@(Model.PageNumber + 1)" asp-route-Search="@Model.Search" asp-route-NeedsTaggingOnly="@Model.NeedsTaggingOnly" asp-route-StaleOnly="@Model.StaleOnly">Next</a>
             </li>
         </ul>
     </nav>
