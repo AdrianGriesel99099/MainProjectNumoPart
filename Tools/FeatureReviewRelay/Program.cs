@@ -1,4 +1,5 @@
 using System.Linq;
+using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -112,6 +113,20 @@ static async Task ApplyAsync(HttpClient site, string draftedDir)
                     readyForFinalApproval = draft.ReadyForFinalApproval,
                     questions = draft.Questions?.Select(q => new { prompt = q.Prompt, options = q.Options })
                 });
+
+            if (response.StatusCode == HttpStatusCode.BadRequest)
+            {
+                // The site only ever 400s this route when RecordAiRevisionAsync finds the
+                // proposal is no longer AwaitingAiRevision -- i.e. it moved on (revised again,
+                // approved, denied) since this draft was written, most likely because a previous
+                // run's relay succeeded but its own File.Delete or the workflow's git push never
+                // landed. That proposal will never go back to AwaitingAiRevision, so retrying
+                // this file "tomorrow" would just 400 forever; discard it instead.
+                var reason = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"Proposal {id}: site rejected this revision as no longer valid ({reason}) -- discarding stale draft.");
+                File.Delete(file);
+                continue;
+            }
             response.EnsureSuccessStatusCode();
 
             File.Delete(file);
