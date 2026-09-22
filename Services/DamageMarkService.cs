@@ -85,6 +85,40 @@ namespace MainProjectNumoPart.Services
         private static double ClampPercent(double value) =>
             double.IsFinite(value) ? Math.Clamp(value, 0, 100) : 50;
 
+        // Text-only, like PhotoCommentService.EditAsync/VehicleUpdateService.EditAsync — position,
+        // part and photo anchor stay put. Repositioning or moving a mark to a different part is a
+        // bigger change than fixing a typo in what the damage is, and belongs behind the same
+        // delete-and-recreate flow those still use.
+        public async Task<NoteResult> EditAsync(
+            int markId, string? note, string requesterId, bool requesterIsAdmin, CancellationToken ct = default)
+        {
+            var mark = await _db.DamageMarks.FindAsync(new object[] { markId }, ct);
+            if (mark is null)
+            {
+                return new NoteResult(NoteStatus.NotFound);
+            }
+            if (!requesterIsAdmin && mark.AuthorId != requesterId)
+            {
+                return new NoteResult(NoteStatus.Forbidden);
+            }
+
+            var trimmed = note?.Trim();
+            if (string.IsNullOrEmpty(trimmed))
+            {
+                return new NoteResult(NoteStatus.EmptyBody, "Say what the damage is before saving.");
+            }
+            if (trimmed.Length > MaxNoteLength)
+            {
+                return new NoteResult(NoteStatus.TooLong, $"Notes are limited to {MaxNoteLength} characters.");
+            }
+
+            mark.Note = trimmed;
+            await _db.SaveChangesAsync(ct);
+
+            _logger.LogInformation("Damage mark {MarkId} edited", markId);
+            return new NoteResult(NoteStatus.Success);
+        }
+
         public async Task<NoteResult> DeleteAsync(
             int markId, string requesterId, bool requesterIsAdmin, CancellationToken ct = default)
         {

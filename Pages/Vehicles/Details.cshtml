@@ -217,10 +217,17 @@
                             <span class="fw-semibold">@Html.DisplayFor(_ => mark.Part)</span>
                             <span class="text-muted small">@mark.CreatedAtUtc.ToString("d MMM yyyy, HH:mm")</span>
                         </div>
-                        <p class="mb-1 small" style="white-space: pre-wrap;">@mark.Note</p>
+                        <p class="mb-1 small damage-mark-note" style="white-space: pre-wrap;">@mark.Note</p>
                         <span class="text-muted small">@mark.AuthorEmail</span>
                         @if (User.CanDeleteNote(mark.AuthorId))
                         {
+                            <div class="damage-mark-edit-form d-none mb-1">
+                                <textarea class="form-control damage-mark-edit-textarea" rows="2" maxlength="2000">@mark.Note</textarea>
+                                <button type="button" class="btn btn-sm btn-primary mt-1 damage-mark-edit-save" data-mark-id="@mark.Id">Save</button>
+                                <button type="button" class="btn btn-sm btn-link mt-1 damage-mark-edit-cancel">Cancel</button>
+                                <div class="text-danger small mt-1 damage-mark-edit-error"></div>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-secondary damage-mark-edit ms-2" data-mark-id="@mark.Id">Edit</button>
                             <button type="button" class="btn btn-sm btn-outline-danger damage-mark-delete ms-2" data-mark-id="@mark.Id">Delete</button>
                         }
                     </div>

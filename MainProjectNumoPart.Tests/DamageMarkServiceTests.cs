@@ -178,6 +178,123 @@ namespace MainProjectNumoPart.Tests
         }
 
         [Fact]
+        public async Task EditAsync_AllowsTheAuthorToChangeTheirOwnNote()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var vehicle = SeedVehicle(db);
+            await Build(db).AddAsync(vehicle.Id, Part.FrontBumper, null, 50, 50, "original note", "u1", "staff@w.local");
+            var id = db.DamageMarks.Single().Id;
+
+            var result = await Build(db).EditAsync(id, "corrected note", "u1", requesterIsAdmin: false);
+
+            Assert.Equal(NoteStatus.Success, result.Status);
+            Assert.Equal("corrected note", db.DamageMarks.Single().Note);
+        }
+
+        [Fact]
+        public async Task EditAsync_TrimsWhitespace()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var vehicle = SeedVehicle(db);
+            await Build(db).AddAsync(vehicle.Id, Part.FrontBumper, null, 50, 50, "original note", "u1", "staff@w.local");
+            var id = db.DamageMarks.Single().Id;
+
+            await Build(db).EditAsync(id, "  padded edit  ", "u1", requesterIsAdmin: false);
+
+            Assert.Equal("padded edit", db.DamageMarks.Single().Note);
+        }
+
+        [Fact]
+        public async Task EditAsync_DoesNotChangePositionPartPhotoOrCreatedAtUtc()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var vehicle = SeedVehicle(db);
+            var photo = SeedPhoto(db, vehicle, Part.DoorFrontLeft);
+            await Build(db).AddAsync(vehicle.Id, Part.DoorFrontLeft, photo.Id, 10, 20, "original note", "u1", "staff@w.local");
+            var original = db.DamageMarks.Single();
+            var createdAt = original.CreatedAtUtc;
+
+            await Build(db).EditAsync(original.Id, "corrected note", "u1", requesterIsAdmin: false);
+
+            var saved = db.DamageMarks.Single();
+            Assert.Equal(Part.DoorFrontLeft, saved.Part);
+            Assert.Equal(photo.Id, saved.PhotoId);
+            Assert.Equal(10, saved.XPercent);
+            Assert.Equal(20, saved.YPercent);
+            Assert.Equal(createdAt, saved.CreatedAtUtc);
+        }
+
+        [Fact]
+        public async Task EditAsync_AllowsAnAdminToChangeSomeoneElsesNote()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var vehicle = SeedVehicle(db);
+            await Build(db).AddAsync(vehicle.Id, Part.FrontBumper, null, 50, 50, "original note", "u1", "staff@w.local");
+            var id = db.DamageMarks.Single().Id;
+
+            var result = await Build(db).EditAsync(id, "corrected by admin", "admin1", requesterIsAdmin: true);
+
+            Assert.Equal(NoteStatus.Success, result.Status);
+            Assert.Equal("corrected by admin", db.DamageMarks.Single().Note);
+        }
+
+        [Fact]
+        public async Task EditAsync_RejectsANonAdminEditingSomeoneElsesNote()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var vehicle = SeedVehicle(db);
+            await Build(db).AddAsync(vehicle.Id, Part.FrontBumper, null, 50, 50, "original note", "u1", "staff@w.local");
+            var id = db.DamageMarks.Single().Id;
+
+            var result = await Build(db).EditAsync(id, "hijacked note", "u2", requesterIsAdmin: false);
+
+            Assert.Equal(NoteStatus.Forbidden, result.Status);
+            Assert.Equal("original note", db.DamageMarks.Single().Note);
+        }
+
+        [Fact]
+        public async Task EditAsync_ReturnsNotFoundForUnknownId()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+
+            var result = await Build(db).EditAsync(999, "text", "u1", requesterIsAdmin: false);
+
+            Assert.Equal(NoteStatus.NotFound, result.Status);
+        }
+
+        [Theory]
+        [InlineData(null)]
+        [InlineData("")]
+        [InlineData("   ")]
+        public async Task EditAsync_RejectsEmptyNote(string? note)
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var vehicle = SeedVehicle(db);
+            await Build(db).AddAsync(vehicle.Id, Part.FrontBumper, null, 50, 50, "original note", "u1", "staff@w.local");
+            var id = db.DamageMarks.Single().Id;
+
+            var result = await Build(db).EditAsync(id, note, "u1", requesterIsAdmin: false);
+
+            Assert.Equal(NoteStatus.EmptyBody, result.Status);
+            Assert.Equal("original note", db.DamageMarks.Single().Note);
+        }
+
+        [Fact]
+        public async Task EditAsync_RejectsNoteOverTheLengthCap()
+        {
+            using var db = TestDbContextFactory.CreateInMemory();
+            var vehicle = SeedVehicle(db);
+            await Build(db).AddAsync(vehicle.Id, Part.FrontBumper, null, 50, 50, "original note", "u1", "staff@w.local");
+            var id = db.DamageMarks.Single().Id;
+            var tooLong = new string('x', DamageMarkService.MaxNoteLength + 1);
+
+            var result = await Build(db).EditAsync(id, tooLong, "u1", requesterIsAdmin: false);
+
+            Assert.Equal(NoteStatus.TooLong, result.Status);
+            Assert.Equal("original note", db.DamageMarks.Single().Note);
+        }
+
+        [Fact]
         public async Task DeleteAsync_AllowsTheAuthorToRemoveTheirOwnMark()
         {
             using var db = TestDbContextFactory.CreateInMemory();
