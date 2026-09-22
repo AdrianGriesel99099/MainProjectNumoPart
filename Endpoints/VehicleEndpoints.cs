@@ -20,6 +20,8 @@ namespace MainProjectNumoPart.Endpoints
         // so it's anchored at a fixed position rather than a specific photo.
         public record AddDamageMarkRequest(Part Part, int? PhotoId, double XPercent, double YPercent, string? Note);
 
+        public record EditDamageMarkRequest(string? Note);
+
         public record VehicleSuggestion(int Id, string? Vin, string? Reg, string? MakeModel);
 
         // Fewer than VehicleLookupService's own MaxResults (25) -- that list is a "pick the right
@@ -166,6 +168,29 @@ namespace MainProjectNumoPart.Endpoints
             })
             // Two arguments, never the comma-joined Roles.StaffOrAdmin constant — see the
             // tagging endpoint in PhotoEndpoints.cs for why that silently denies everyone.
+            .RequireAuthorization(policy => policy.RequireRole(Roles.Staff, Roles.Admin));
+
+            group.MapPut("/damage-marks/{markId:int}", async (
+                int markId,
+                EditDamageMarkRequest? body,
+                DamageMarkService marks,
+                UserManager<IdentityUser> userManager,
+                HttpContext http,
+                CancellationToken ct) =>
+            {
+                var userId = userManager.GetUserId(http.User)!;
+                var result = await marks.EditAsync(markId, body?.Note, userId, http.User.IsAdmin(), ct);
+
+                return result.Status switch
+                {
+                    NoteStatus.Success => Results.Ok(),
+                    NoteStatus.Forbidden => Results.StatusCode(StatusCodes.Status403Forbidden),
+                    NoteStatus.NotFound => Results.NotFound(),
+                    _ => Results.BadRequest(result.Message)
+                };
+            })
+            // Staff, not just Admin, can reach this now — EditAsync itself enforces that only
+            // the mark's own author or an Admin can actually change it.
             .RequireAuthorization(policy => policy.RequireRole(Roles.Staff, Roles.Admin));
 
             group.MapDelete("/damage-marks/{markId:int}", async (
