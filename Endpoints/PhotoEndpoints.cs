@@ -119,7 +119,11 @@ namespace MainProjectNumoPart.Endpoints
                         foreach (var photo in photos)
                         {
                             // No compression: JPEGs/PNGs are already compressed, so re-compressing just burns CPU for no size benefit.
-                            var entry = archive.CreateEntry($"{photo.Stage}/{photo.FileName}", CompressionLevel.NoCompression);
+                            // FileName embeds a VIN/Reg that's never restricted to a safe character set (see
+                            // PhotoNaming.SanitizeForZipEntry) -- sanitized here so it can't carry path-traversal
+                            // segments into the archive.
+                            var entry = archive.CreateEntry(
+                                $"{photo.Stage}/{PhotoNaming.SanitizeForZipEntry(photo.FileName)}", CompressionLevel.NoCompression);
                             using var entryStream = entry.Open();
                             await using var sourceStream = await storage.OpenOriginalReadAsync(photo.BlobPathOriginal);
                             await sourceStream.CopyToAsync(entryStream);

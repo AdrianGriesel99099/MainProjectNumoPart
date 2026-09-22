@@ -63,5 +63,32 @@ namespace MainProjectNumoPart.Tests
         {
             Assert.Throws<ArgumentException>(() => PhotoNaming.BuildFileName(null, null, 1, ".jpg"));
         }
+
+        [Fact]
+        public void SanitizeForZipEntry_LeavesAnOrdinaryFileNameUnchanged()
+        {
+            Assert.Equal("1HGBH41JXMN109186-VIN-001.jpg", PhotoNaming.SanitizeForZipEntry("1HGBH41JXMN109186-VIN-001.jpg"));
+        }
+
+        [Fact]
+        public void SanitizeForZipEntry_StripsPathTraversalSegments()
+        {
+            var sanitized = PhotoNaming.SanitizeForZipEntry("../../etc/passwd-VIN-001.jpg");
+
+            Assert.DoesNotContain("/", sanitized);
+            Assert.DoesNotContain("..", sanitized);
+        }
+
+        [Fact]
+        public void SanitizeForZipEntry_StripsBackslashes()
+        {
+            Assert.DoesNotContain("\\", PhotoNaming.SanitizeForZipEntry(@"..\..\windows\win.ini-VIN-001.jpg"));
+        }
+
+        [Fact]
+        public void SanitizeForZipEntry_FallsBackWhenNothingSafeRemains()
+        {
+            Assert.Equal("photo", PhotoNaming.SanitizeForZipEntry("../../.."));
+        }
     }
 }
