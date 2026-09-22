@@ -40,6 +40,12 @@ namespace MainProjectNumoPart.Pages.Vehicles
         [BindProperty(SupportsGet = true)]
         public bool NeedsTaggingOnly { get; set; }
 
+        // Narrows the browse list to vehicles whose current stage (per VehicleCurrentStage, the
+        // same signal behind the Stage column) matches this value -- lets staff pull up e.g.
+        // every vehicle sitting at Checkout without scanning the Stage column page by page.
+        [BindProperty(SupportsGet = true)]
+        public Stage? StageFilter { get; set; }
+
         public List<Vehicle> Vehicles { get; set; } = new();
         public int TotalCount { get; set; }
         public int TotalPages => (int)Math.Ceiling(TotalCount / (double)PageSize);
@@ -72,6 +78,16 @@ namespace MainProjectNumoPart.Pages.Vehicles
             if (NeedsTaggingOnly)
             {
                 query = query.Where(v => v.Photos.Any(p => p.Part == null));
+            }
+
+            if (StageFilter.HasValue)
+            {
+                var stage = StageFilter.Value;
+                query = query.Where(v =>
+                    v.Photos.Any() &&
+                    v.Photos.OrderByDescending(p => p.UploadedAtUtc)
+                            .ThenByDescending(p => p.Id)
+                            .First().Stage == stage);
             }
 
             TotalCount = await query.CountAsync();
