@@ -82,19 +82,30 @@
     <script>
         document.getElementById('add-comment-form').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const body = document.getElementById('comment-body').value;
-            const response = await fetch('/api/photos/@Model.Photo.Id/comments', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ body })
-            });
-            // Exact status, not response.ok — a role-denied request answers 302 to
-            // /Account/AccessDenied, which fetch follows to a 200 and would look like success.
-            if (response.status === 200) {
-                window.location.reload();
-            } else {
+            const button = e.currentTarget.querySelector('button[type="submit"]');
+            const originalText = button.innerHTML;
+            button.disabled = true;
+            button.classList.add('btn-clicked');
+            button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Posting…';
+            try {
+                const body = document.getElementById('comment-body').value;
+                const response = await fetch('/api/photos/@Model.Photo.Id/comments', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ body })
+                });
+                // Exact status, not response.ok — a role-denied request answers 302 to
+                // /Account/AccessDenied, which fetch follows to a 200 and would look like success.
+                if (response.status === 200) {
+                    window.location.reload();
+                    return;
+                }
                 document.getElementById('comment-error').textContent =
                     (await response.text()) || 'Could not post the comment.';
+            } finally {
+                button.disabled = false;
+                button.classList.remove('btn-clicked');
+                button.innerHTML = originalText;
             }
         });
     </script>
