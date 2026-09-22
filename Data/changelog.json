@@ -1,5 +1,10 @@
 [
   {
+    "date": "2026-09-22",
+    "title": "Feature added: filter All Vehicles by vehicle stage",
+    "description": "A new dropdown on the All Vehicles page lets you filter by the vehicle's current workflow stage (Checkin, Quote, Progress, Checkout, or Extra), so you can quickly see all vehicles at a specific stage without scrolling through the entire list."
+  },
+  {
     "date": "2026-09-21",
     "title": "Feature added: filter All Vehicles page by vehicles needing tagging",
     "description": "A new checkbox on the All Vehicles page lets you show only vehicles with untagged photos, so you can quickly see which jobs need photo tagging and skip the fully tagged ones."
