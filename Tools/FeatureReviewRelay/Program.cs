@@ -80,14 +80,34 @@ static async Task PrepareAsync(HttpClient site, string repoRoot, string pendingD
     if (approved.Count == 0) return;
 
     var backlogPath = Path.Combine(repoRoot, "docs", "BACKLOG.md");
-    var lines = approved.Select(p => $"Build: {p.Title} (proposal #{p.Id}): {SingleLine(p.Description)}");
-    await File.AppendAllLinesAsync(backlogPath, lines);
 
+    // Each proposal's mark-queued call and its docs/BACKLOG.md line must succeed or fail
+    // together, one proposal at a time -- otherwise a failure partway through this loop (a
+    // transient 5xx, a timeout) leaves later proposals unprocessed AND throws, which fails
+    // this whole job and skips the workflow's follow-up commit step. That used to discard the
+    // BACKLOG.md line for every proposal already marked-queued earlier in the SAME loop
+    // iteration -- the site would never offer it via approved-unqueued again (it's already
+    // marked queued), but its Build: line had never been committed, losing it permanently.
+    // Confirming the site update before writing the local line (matching ApplyAsync's
+    // per-file try/catch below) means a failure here only ever costs a retry next cycle, same
+    // as everywhere else in this tool.
     foreach (var proposal in approved)
     {
-        var response = await site.PostAsync($"api/bot/feature-proposals/{proposal.Id}/mark-queued", content: null);
-        response.EnsureSuccessStatusCode();
-        Console.WriteLine($"Proposal {proposal.Id} \"{proposal.Title}\": queued in docs/BACKLOG.md.");
+        try
+        {
+            var response = await site.PostAsync($"api/bot/feature-proposals/{proposal.Id}/mark-queued", content: null);
+            response.EnsureSuccessStatusCode();
+
+            var line = $"Build: {proposal.Title} (proposal #{proposal.Id}): {SingleLine(proposal.Description)}";
+            await File.AppendAllLinesAsync(backlogPath, new[] { line });
+            Console.WriteLine($"Proposal {proposal.Id} \"{proposal.Title}\": queued in docs/BACKLOG.md.");
+        }
+        catch (Exception ex)
+        {
+            // Left as still approved-unqueued on the site -- retried on tomorrow's cycle
+            // rather than losing it or committing a Build: line the site doesn't know is queued.
+            Console.WriteLine($"Proposal {proposal.Id}: mark-queued failed, will retry tomorrow. {ex.Message}");
+        }
     }
 }
 
