@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using Azure;
 using MainProjectNumoPart.Data;
 using MainProjectNumoPart.Models;
 using Microsoft.EntityFrameworkCore;
@@ -118,10 +119,22 @@ namespace MainProjectNumoPart.Services
             {
                 ct.ThrowIfCancellationRequested();
 
-                await using var originalStream = await _storage.OpenOriginalReadAsync(photo.BlobPathOriginal, ct);
-                using var buffer = new MemoryStream();
-                await originalStream.CopyToAsync(buffer, ct);
-                var originalBytes = buffer.ToArray();
+                byte[] originalBytes;
+                try
+                {
+                    await using var originalStream = await _storage.OpenOriginalReadAsync(photo.BlobPathOriginal, ct);
+                    using var buffer = new MemoryStream();
+                    await originalStream.CopyToAsync(buffer, ct);
+                    originalBytes = buffer.ToArray();
+                }
+                catch (RequestFailedException ex) when (ex.Status == 404)
+                {
+                    // The Photo row can outlive its blob for a moment: VehicleDeletionService
+                    // deletes blobs before removing rows, so a delete running concurrently with
+                    // this export can leave a row here whose blob is already gone. Same
+                    // "dropped rather than failing the whole export" handling as a stale id.
+                    continue;
+                }
 
                 var marks = marksByPhoto.TryGetValue(photo.Id, out var m) ? m : new List<DamageMark>();
                 byte[] finalBytes;
@@ -150,6 +163,11 @@ namespace MainProjectNumoPart.Services
                     photo.Part,
                     photo.UploadedAtUtc,
                     comments.Select(c => new PhotoExportComment(c.AuthorEmail, c.CreatedAtUtc, c.Body)).ToList()));
+            }
+
+            if (items.Count == 0)
+            {
+                return new PhotoExportResult(PhotoExportStatus.NoPhotosSelected, Message: "No photos selected.");
             }
 
             byte[] content;
