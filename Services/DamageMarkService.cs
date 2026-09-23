@@ -85,6 +85,40 @@ namespace MainProjectNumoPart.Services
         private static double ClampPercent(double value) =>
             double.IsFinite(value) ? Math.Clamp(value, 0, 100) : 50;
 
+        // A mistyped or incomplete note previously meant deleting the mark and re-placing it from
+        // scratch — losing the original pin position, part, and photo anchor in the process. This
+        // mirrors VehicleUpdateService.EditAsync/PhotoCommentService.EditAsync: only the note text
+        // changes, everything else about what the mark is and where it sits stays put.
+        public async Task<NoteResult> EditAsync(
+            int markId, string? note, string requesterId, bool requesterIsAdmin, CancellationToken ct = default)
+        {
+            var mark = await _db.DamageMarks.FindAsync(new object[] { markId }, ct);
+            if (mark is null)
+            {
+                return new NoteResult(NoteStatus.NotFound);
+            }
+            if (!requesterIsAdmin && mark.AuthorId != requesterId)
+            {
+                return new NoteResult(NoteStatus.Forbidden);
+            }
+
+            var trimmed = note?.Trim();
+            if (string.IsNullOrEmpty(trimmed))
+            {
+                return new NoteResult(NoteStatus.EmptyBody, "Say what the damage is before saving.");
+            }
+            if (trimmed.Length > MaxNoteLength)
+            {
+                return new NoteResult(NoteStatus.TooLong, $"Notes are limited to {MaxNoteLength} characters.");
+            }
+
+            mark.Note = trimmed;
+            await _db.SaveChangesAsync(ct);
+
+            _logger.LogInformation("Damage mark {MarkId} edited", markId);
+            return new NoteResult(NoteStatus.Success);
+        }
+
         public async Task<NoteResult> DeleteAsync(
             int markId, string requesterId, bool requesterIsAdmin, CancellationToken ct = default)
         {

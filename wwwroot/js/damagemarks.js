@@ -180,4 +180,48 @@
     document.querySelectorAll('.damage-mark-delete').forEach((btn) => {
         btn.addEventListener('click', () => deleteMark(btn.dataset.markId));
     });
+
+    // Edit-in-place for a mark's note, in the "Damage marks" list below the popup — mirrors the
+    // job-card update edit flow on this same page. Only the note text is editable here: the pin's
+    // position, part and photo anchor are set once when the mark is placed and stay put.
+    document.querySelectorAll('.damage-mark-edit').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            const entry = btn.closest('li');
+            entry.querySelector('.damage-mark-note').classList.add('d-none');
+            entry.querySelector('.damage-mark-edit-form').classList.remove('d-none');
+            btn.classList.add('d-none');
+            entry.querySelector('.damage-mark-delete').classList.add('d-none');
+        });
+    });
+
+    document.querySelectorAll('.damage-mark-edit-cancel').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            const entry = btn.closest('li');
+            entry.querySelector('.damage-mark-edit-textarea').value = entry.querySelector('.damage-mark-note').textContent;
+            entry.querySelector('.damage-mark-edit-error').textContent = '';
+            entry.querySelector('.damage-mark-edit-form').classList.add('d-none');
+            entry.querySelector('.damage-mark-note').classList.remove('d-none');
+            entry.querySelector('.damage-mark-edit').classList.remove('d-none');
+            entry.querySelector('.damage-mark-delete').classList.remove('d-none');
+        });
+    });
+
+    document.querySelectorAll('.damage-mark-edit-save').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+            const entry = btn.closest('li');
+            const id = btn.dataset.markId;
+            const note = entry.querySelector('.damage-mark-edit-textarea').value;
+            const response = await fetch(`/api/vehicles/damage-marks/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ note })
+            });
+            if (response.status === 200) {
+                window.location.reload();
+            } else {
+                entry.querySelector('.damage-mark-edit-error').textContent =
+                    (await response.text()) || 'Could not save the mark.';
+            }
+        });
+    });
 })();
