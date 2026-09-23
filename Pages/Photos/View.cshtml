@@ -11,6 +11,7 @@
 <div class="row mt-2">
     <div class="col-md-8">
         <img src="/api/photos/@Model.Photo.Id/original" class="img-fluid rounded" alt="Photo @Model.Photo.SequenceNumber.ToString("000")" />
+        <a href="/api/photos/@Model.Photo.Id/download" class="btn btn-sm btn-outline-secondary mt-2" download>Download original</a>
     </div>
     <div class="col-md-4">
         <dl class="row small">

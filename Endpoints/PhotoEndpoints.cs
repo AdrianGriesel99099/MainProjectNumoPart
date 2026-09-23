@@ -42,6 +42,16 @@ namespace MainProjectNumoPart.Endpoints
                 return Results.Redirect(url.ToString());
             });
 
+            // Unlike /original above, this streams the bytes through the server rather than
+            // redirecting to a SAS URL, so the response can carry a friendly Content-Disposition
+            // filename (Photo.FileName) instead of whatever the blob path itself looks like.
+            group.MapGet("/{id:int}/download", async (int id, Services.PhotoDownloadService downloader, CancellationToken ct) =>
+            {
+                var result = await downloader.GetAsync(id, ct);
+                if (result.Status == Services.PhotoDownloadStatus.NotFound) return Results.NotFound();
+                return Results.File(result.Content!, result.ContentType!, result.FileName);
+            });
+
             group.MapDelete("/{id:int}", async (int id, Data.AppDbContext db, Services.IPhotoStorage storage) =>
             {
                 var photo = await db.Photos.FindAsync(id);
