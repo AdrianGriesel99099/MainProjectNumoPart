@@ -29,6 +29,14 @@ namespace MainProjectNumoPart.Pages.Photos
         public string? UploaderEmail { get; set; }
         public List<PhotoComment> CommentsOldestFirst { get; set; } = new();
 
+        // Navigation within the photo's own stage, in the same SequenceNumber order the vehicle
+        // page's grid groups and orders photos by (Pages/Vehicles/Details.cshtml.cs) -- so "Next"
+        // here always matches what "next" looks like on that grid.
+        public int? PreviousPhotoId { get; set; }
+        public int? NextPhotoId { get; set; }
+        public int PositionInStage { get; set; }
+        public int StagePhotoCount { get; set; }
+
         public async Task<IActionResult> OnGetAsync(int id)
         {
             var photo = await _db.Photos
@@ -37,6 +45,17 @@ namespace MainProjectNumoPart.Pages.Photos
             if (photo is null) return NotFound();
 
             Photo = photo;
+
+            var stagePhotoIds = await _db.Photos
+                .Where(p => p.VehicleId == photo.VehicleId && p.Stage == photo.Stage)
+                .OrderBy(p => p.SequenceNumber)
+                .Select(p => p.Id)
+                .ToListAsync();
+            var currentIndex = stagePhotoIds.IndexOf(photo.Id);
+            PositionInStage = currentIndex + 1;
+            StagePhotoCount = stagePhotoIds.Count;
+            PreviousPhotoId = currentIndex > 0 ? stagePhotoIds[currentIndex - 1] : null;
+            NextPhotoId = currentIndex < stagePhotoIds.Count - 1 ? stagePhotoIds[currentIndex + 1] : null;
 
             // Best-effort: UploaderId is a loose string with no FK (see UserAdminService.
             // DeleteUserAsync), so the account may no longer exist for an old photo. Falling back
