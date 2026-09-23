@@ -8,6 +8,22 @@
 
 <a asp-page="/Vehicles/Details" asp-route-id="@Model.Photo.VehicleId" class="small">&larr; Back to vehicle</a>
 
+<div class="d-flex justify-content-between align-items-center mt-2">
+    <div>
+        @if (Model.PreviousPhotoId is not null)
+        {
+            <a asp-page="/Photos/View" asp-route-id="@Model.PreviousPhotoId" class="small">&larr; Previous</a>
+        }
+    </div>
+    <span class="small text-muted">@Model.Photo.Stage: photo @Model.PositionInStage of @Model.StagePhotoCount</span>
+    <div>
+        @if (Model.NextPhotoId is not null)
+        {
+            <a asp-page="/Photos/View" asp-route-id="@Model.NextPhotoId" class="small">Next &rarr;</a>
+        }
+    </div>
+</div>
+
 <div class="row mt-2">
     <div class="col-md-8">
         <img src="/api/photos/@Model.Photo.Id/original" class="img-fluid rounded" alt="Photo @Model.Photo.SequenceNumber.ToString("000")" />
